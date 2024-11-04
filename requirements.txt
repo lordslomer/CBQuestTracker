@@ -1,0 +1,10 @@
+localStoragePy
+opencv-python
+customtkinter
+pyinstaller
+jellyfish
+requests
+Pillow
+numpy
+regex
+ttkbootstrap
