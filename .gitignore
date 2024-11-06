@@ -16,3 +16,4 @@ instance/
 # Jupyter Notebook
 .ipynb_checkpoints
 node_modules/
+Tesseract-OCR/

@@ -1,11 +1,16 @@
+gevent-websocket
+python-socketio
+python-engineio
+Flask-SocketIO
 localStoragePy
-flask-socketio
 opencv-python
 flaskwebgui
+pytesseract
 pyinstaller
 jellyfish
 requests
 Pillow
+gevent
 numpy
 regex
 flask

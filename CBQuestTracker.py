@@ -2,18 +2,18 @@ from flask import Flask, redirect, render_template, request as req
 from localStoragePy import localStoragePy as lsp
 from flask_socketio import SocketIO
 from flaskwebgui import FlaskUI
-from typing import List, Tuple
 from PIL import ImageGrab
+from ctypes import WinDLL 
+from typing import List
 import numpy as np
+import pytesseract
 import regex as re
 import threading
 import jellyfish
-import requests
 import os, sys
 import json
 import cv2
 
-from ctypes import WinDLL #look into
 
 def global_constants():
     naughty_dict = {
@@ -25,6 +25,7 @@ def global_constants():
     url = "https://cbimg.salamski.com"
     headers = {"content-type": "image/png"}
     max_quest_lenth = 110
+    pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     return naughty_dict, url, headers, max_quest_lenth
 
 
@@ -44,13 +45,23 @@ def instance_check():
 
 class Model:
     def __init__(self, socketio: SocketIO):
-        self.vocabulary = requests.get(url + "/quests").json()
+        self.vocabulary = self.__read_vocab()
         self.db = lsp("CBQuestTracker", "json")
         self.stop_event = threading.Event()
         self.sync_thread = None
         self.stop_event.set()
         self.__read_state()
         self.io = socketio
+
+    def __read_vocab(self):
+        dbName = resource_path("vocabulary.json")
+        if os.path.isfile(dbName):
+            with open(dbName, "r") as f:
+                db = json.load(f)
+                f.close()
+        else:
+            db = []
+        return db
 
     def __read_state(self):
         db = self.db.getItem("db")
@@ -75,15 +86,28 @@ class Model:
             json.dumps({"quests": self.quests, "duplicates": self.duplicates, "done": self.done}),
         )
 
-    def __send_screen(self):
+    def __process_img(self, img):
+        mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
+        mask_blue = cv2.inRange(img, np.array([50, 40, 10]), np.array([250, 180, 40]))
+        mask = mask_white + mask_blue
+        img = cv2.bitwise_and(img, img, mask=mask)
+
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
+        img = cv2.GaussianBlur(img, (1, 1), 0)
+        img = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)[1]
+        return img
+
+    def __text_to_quests(self, text):
+        split = list(filter(None, re.split('\n\n', text)))
+        quests = [re.sub(r"[\d_,]+\/|(?<=\d),(?=\d)", "", re.sub(r"\s", " ", s).strip()) for s in split]
+        quests = list(filter(None, quests))
+        return quests
+
+    def __grab_quests_from_screen(self):
         img = np.array(ImageGrab.grab(bbox=(1200, 435, 1850, 890)))
-        _, img_png = cv2.imencode(".png", img)
-        img_string = img_png.tobytes()
-        try:
-            r = requests.post(url + "/upload", data=img_string, headers=headers)
-            return r.json()
-        except:
-            return []
+        img = self.__process_img(img)
+        return self.__text_to_quests(pytesseract.image_to_string(img, lang="eng", config="--psm 4"))
 
     def __score_quest(self, quest):
         if quest[-1] != "." and len(quest) < max_quest_lenth:
@@ -142,7 +166,7 @@ class Model:
         pd = []
         self.__write_state(dq)
         while not self.stop_event.is_set():
-            for quest in self.__send_screen():
+            for quest in self.__grab_quests_from_screen():
 
                 scores, quest = self.__score_quest(quest)
                 if len(scores) <= 0:
@@ -215,7 +239,7 @@ if __name__ == "__main__" and instance_check():
 
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
     app.config['SECRET_KEY'] = 'secret!'
-    socketio = SocketIO(app)
+    socketio = SocketIO(app, async_mode='gevent')
 
     m = Model(socketio)
     
@@ -261,8 +285,5 @@ if __name__ == "__main__" and instance_check():
             return redirect("/")
         return "BAD!!!", 404
 
-    socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
-    # FlaskUI(app=app, socketio=socketio, server="flask_socketio", fullscreen=False, width=725, height=950).run()
-
-
-
+    # socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
+    FlaskUI(app=app, socketio=socketio, server="flask_socketio", fullscreen=False, width=725, height=950).run()
