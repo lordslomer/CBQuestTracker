@@ -72,7 +72,6 @@
     </div>
 
 
-
     <div id="mainscrollable" class="overflow-auto max-h-[calc(100vh-8.25rem)]">
       {% if quests|length + doneQ|length > 0 %}
 
@@ -118,19 +117,20 @@
         </div>
         {% endfor %}
       </div>
-
+      {% else %}
+      {% if not_syncing %}
 
       <!-- No Quests -->
-      {% else %}
-
-      {% if not_syncing %}
       <div class="mx-2 p-8 space-y-4 bg-dark-200 rounded-xl">
         <p>There are no quests, scan to get them:</p>
         <p>1. Press the Sync button.</p>
         <p>2. Scroll through your unit quests in-game.</p>
         <p>3. Make sure nothing is blocking the quests while your scrolling.</p>
       </div>
+
       {% else %}
+
+      <!-- Syncing Quests List -->
       <div id="questlist" class="flex flex-col p-2 space-y-4 items-center">
         <div
           class="h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] text-red-600"

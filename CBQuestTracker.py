@@ -15,7 +15,7 @@ import os, sys
 import json
 import cv2
 
-
+# Some constants
 def global_constants():
     naughty_dict = {
         "an A+ rating or better in 10 Field or Siege Battles of any type",
@@ -29,12 +29,12 @@ def global_constants():
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     return naughty_dict, url, headers, max_quest_lenth
 
-
+# Production path.
 def resource_path(relative_path):
     base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base_path, relative_path)
 
-
+# Check if already running
 def instance_check():
     U32DLL = WinDLL("user32")
     hwnd = U32DLL.FindWindowW(None, "CBQuestTracker")
@@ -44,7 +44,7 @@ def instance_check():
         sys.exit(0)
     return True
 
-
+# Get default browser on windows
 def get_system_default_browser():
     chosen_browser = None
     try:
@@ -65,7 +65,7 @@ def get_system_default_browser():
         print('Failed to look up default browser in system registry. Using fallback value.')
     return chosen_browser
 
-
+# Model class, preforms all operations on the state. 
 class Model:
     def __init__(self, socketio: SocketIO):
         self.vocabulary = self.__read_vocab()
@@ -270,17 +270,9 @@ class Model:
             return True
         return False
 
-    
-if __name__ == "__main__" and instance_check():
-    naughty_dict, url, headers, max_quest_lenth = global_constants()
+# Define served routes, act as Controller.
+def define_routes(app):
 
-    # import screeninfo
-    # print(screeninfo.get_monitors())
-
-    app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
-    socketio = SocketIO(app, async_mode='gevent')
-    m = Model(socketio)
-    
     @app.route('/')
     def hello_world():
         return render_template("index.html", quests=m.quests, dups=m.duplicates, doneQ=m.done, not_syncing=m.stop_event.is_set())
@@ -334,7 +326,22 @@ if __name__ == "__main__" and instance_check():
         else:
             return "BAD!!!", 404
 
-    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=m.last_window_cords[2], height=m.last_window_cords[3])
+
+if __name__ == "__main__" and instance_check():
+    naughty_dict, url, headers, max_quest_lenth = global_constants()
+
+    # import screeninfo
+    # print(screeninfo.get_monitors())
+
+    # Flask API as Controller, serves HTML as View
+    app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
+    define_routes(app)
+    socketio = SocketIO(app, async_mode='gevent')
+
+    # Model class containing all the logic.
+    m = Model(socketio)
     
+    # display the website in a isolated tab, current default browser is used. 
+    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=m.last_window_cords[2], height=m.last_window_cords[3])    
     flaskui.browser_command.append(f"--window-position={",".join(list(map(str,m.last_window_cords[:2])))}")
     flaskui.run()
