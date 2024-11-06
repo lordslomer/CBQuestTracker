@@ -172,8 +172,8 @@
 
 </body>
 <script type="text/javascript" charset="utf-8">
-  async function updateQuestList(list) {
-    await fetch("/update", {
+  async function sendPostReq(url, list) {
+    await fetch(url, {
       method: 'POST',
       headers: {
         "Content-Type": "application/json",
@@ -197,43 +197,50 @@
     ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>")
   })
 
-  function style_grab(e) {
-    e.target.classList.remove('cursor-grabbing');
-    if (!e.item || !e.item.children) return
-    e.item.children[0].classList.remove('cursor-grabbing');
-    e.item.children[0].classList.add('cursor-grab');
+  window.onbeforeunload = function () {
+    sendPostReq("/windowInfo", [window.screenX, window.screenY])
   }
-  function style_grabbing(e) {
-    e.target.classList.add('cursor-grabbing');
-    if (!e.item || !e.item.children) return
-    e.item.children[0].classList.add('cursor-grabbing');
-    e.item.children[0].classList.remove('cursor-grab');
+
+  // Sortable List 
+  if (document.querySelector("#questlist") != null) {
+    function style_grab(e) {
+      e.target.classList.remove('cursor-grabbing');
+      if (!e.item || !e.item.children) return
+      e.item.children[0].classList.remove('cursor-grabbing');
+      e.item.children[0].classList.add('cursor-grab');
+    }
+    function style_grabbing(e) {
+      e.target.classList.add('cursor-grabbing');
+      if (!e.item || !e.item.children) return
+      e.item.children[0].classList.add('cursor-grabbing');
+      e.item.children[0].classList.remove('cursor-grab');
+    }
+    let sortable = Sortable.create(questlist, {
+      selectedClass: "selectedQuest",
+      forceAutoScrollFallback: true,
+      ghostClass: "ghostQuest",
+      scrollSensitivity: 100,
+      fallbackTolerance: 30,
+      forceFallback: true,
+      multiDrag: true,
+      handle: '.drag',
+      scrollSpeed: 15,
+      animation: 150,
+      scroll: true,
+      onEnd: (e) => {
+        for (let i in e.items) {
+          Sortable.utils.deselect(e.items[i]);
+        }
+        style_grab(e)
+      },
+      setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
+      onSort: () => sendPostReq("/update", sortable.toArray()),
+      onChoose: style_grabbing,
+      onStart: style_grabbing,
+      onUnchoose: style_grab,
+      onMove: style_grabbing
+    })
   }
-  let sortable = Sortable.create(questlist, {
-    selectedClass: "selectedQuest",
-    forceAutoScrollFallback: true,
-    ghostClass: "ghostQuest",
-    scrollSensitivity: 100,
-    fallbackTolerance: 30,
-    forceFallback: true,
-    multiDrag: true,
-    handle: '.drag',
-    scrollSpeed: 15,
-    animation: 150,
-    scroll: true,
-    onEnd: (e) => {
-      for (let i in e.items) {
-        Sortable.utils.deselect(e.items[i]);
-      }
-      style_grab(e)
-    },
-    setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
-    onSort: () => updateQuestList(sortable.toArray()),
-    onChoose: style_grabbing,
-    onStart: style_grabbing,
-    onUnchoose: style_grab,
-    onMove: style_grabbing
-  })
 
   let socket = io();
   socket.on('connect', function () {

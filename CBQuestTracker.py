@@ -73,8 +73,8 @@ class Model:
         self.stop_event = threading.Event()
         self.sync_thread = None
         self.stop_event.set()
-        self.__read_state()
         self.io = socketio
+        self.__read_state()
 
     def __read_vocab(self):
         dbName = resource_path("vocabulary.json")
@@ -93,20 +93,22 @@ class Model:
             self.quests: List[str] = list(db["quests"])
             self.duplicates = db["duplicates"]
             self.done = db["done"]
+            self.last_window_cords = db['lastWindowCords']
         else:
             self.__write_state(set())
 
-    def __write_state(self, dq, pd=[], done=[]):
-        if isinstance(dq, set):
-            self.quests: List[str] = list(dq)
-        elif isinstance(dq, list):
-            self.quests: List[str] = dq
+    def __write_state(self, quests, duplicates=[], done=[], last_window_cords=[0,0]):
+        if isinstance(quests, set):
+            self.quests: List[str] = list(quests)
+        elif isinstance(quests, list):
+            self.quests: List[str] = quests
 
-        self.duplicates = pd
+        self.duplicates = duplicates
         self.done = done
+        self.last_window_cords = last_window_cords
         self.db.setItem(
             "db",
-            json.dumps({"quests": self.quests, "duplicates": self.duplicates, "done": self.done}),
+            json.dumps({"quests": self.quests, "duplicates": self.duplicates, "done": self.done, "lastWindowCords": self.last_window_cords}),
         )
 
     def __process_img(self, img):
@@ -187,7 +189,7 @@ class Model:
     def __sync_with_game(self):
         dq = set()
         pd = []
-        self.__write_state(dq)
+        self.__write_state(dq, last_window_cords=self.last_window_cords)
         while not self.stop_event.is_set():
             for quest in self.__grab_quests_from_screen():
 
@@ -203,7 +205,7 @@ class Model:
                     old_pd = len(self.__flatten_dups(pd))
                     self.__add_quest_to_dict(entry_to_add[1], dq, pd)
                     if len(dq) - old_dq > 0 or len(self.__flatten_dups(pd)) - old_pd:
-                        self.__write_state(dq, pd)
+                        self.__write_state(dq, pd, last_window_cords=self.last_window_cords)
                         self.io.emit("new_quest", {"dq" : self.quests, "pd" : self.duplicates})
 
     def start_sync_thread(self):
@@ -214,7 +216,7 @@ class Model:
 
     def update_sorted_list(self, input):
         if sorted(input) == sorted(self.quests):
-            self.__write_state(input, self.duplicates, self.done)
+            self.__write_state(input, self.duplicates, self.done, self.last_window_cords)
             return True
         else:
             return False
@@ -224,7 +226,7 @@ class Model:
             match = self.quests[index]
             self.quests.remove(match)
             self.done = [match] + self.done
-            self.__write_state(self.quests ,self.duplicates, self.done)
+            self.__write_state(self.quests ,self.duplicates, self.done, self.last_window_cords)
             return True
         return False
     
@@ -232,7 +234,7 @@ class Model:
         if "done" in form and form['done'] in self.done:
             self.done.remove(form['done'])
             self.quests.append(form['done'])
-            self.__write_state(self.quests ,self.duplicates, self.done)
+            self.__write_state(self.quests ,self.duplicates, self.done, self.last_window_cords)
             return True
         return False
 
@@ -253,12 +255,22 @@ class Model:
                     if found != dup:
                         self.quests[index] = dup
                     self.duplicates = self.duplicates[1:]
-                    self.__write_state(self.quests, self.duplicates, self.done)
+                    self.__write_state(self.quests, self.duplicates, self.done, self.last_window_cords)
                     return True
         return False
 
+    def save_last_window_cords(self, cords):
+        if len(cords) == 2 and isinstance(cords[0], int) and isinstance(cords[1], int) and cords != self.last_window_cords:
+            self.__write_state(self.quests, self.duplicates, self.done, cords)
+            return True
+        return False
+
+    
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()
+
+    # import screeninfo
+    # print(screeninfo.get_monitors())
 
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
     socketio = SocketIO(app, async_mode='gevent')
@@ -310,6 +322,15 @@ if __name__ == "__main__" and instance_check():
         if m.stop_event.is_set() and m.remove_duplicates(req.form): 
             return redirect("/")
         return "BAD!!!", 404
+    
+    @app.route("/windowInfo", methods=['POST'])
+    def recive_window_info():
+        if m.save_last_window_cords(req.json):
+            return redirect("/")
+        else:
+            return "BAD!!!", 404
 
     # socketio.run(app=app, host="0.0.0.0", port=3000)
-    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=725, height=950).run()
+    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=725, height=950)
+    flaskui.browser_command.append(f"--window-position={",".join(list(map(str,m.last_window_cords)))}")
+    flaskui.run()
