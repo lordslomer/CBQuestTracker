@@ -238,7 +238,6 @@ if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()
 
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
-    app.config['SECRET_KEY'] = 'secret!'
     socketio = SocketIO(app, async_mode='gevent')
 
     m = Model(socketio)
