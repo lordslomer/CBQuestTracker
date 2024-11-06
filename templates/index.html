@@ -171,7 +171,10 @@
   {% endif %}
 
 </body>
+
 <script type="text/javascript" charset="utf-8">
+
+  //Post Request Template
   async function sendPostReq(url, list) {
     await fetch(url, {
       method: 'POST',
@@ -182,23 +185,25 @@
     })
   }
 
+  //Retain scroll
   document.addEventListener("DOMContentLoaded", function (event) {
     var scrollpos = localStorage.getItem('scrollpos');
     if (scrollpos) document.querySelector("#mainscrollable").scrollTo(0, scrollpos, {
       behavior: "smooth"
     });
   });
-
   document.querySelector("#mainscrollable").onscroll = function (e) {
     localStorage.setItem('scrollpos', e.target.scrollTop);
   };
 
+  //Change color of Numbers
   [...document.querySelectorAll(".regex-target")].forEach(ptag => {
     ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>")
   })
 
+  //Save the Window's last position
   window.onbeforeunload = function () {
-    sendPostReq("/windowInfo", [window.screenX, window.screenY])
+    sendPostReq("/windowInfo", [window.screenX, window.screenY, window.outerWidth, window.outerHeight])
   }
 
   // Sortable List 
@@ -242,6 +247,7 @@
     })
   }
 
+  //Socket connection for live updates from the Syncing Thread
   let socket = io();
   socket.on('connect', function () {
     socket.on('new_quest', function ({ dq, pd }) {

@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='cb-quest-tracker',
+    name='CB Quest Tracker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
