@@ -1,4 +1,5 @@
-from flask import Flask, redirect, render_template, request as req
+from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
+from flask import Flask, redirect, render_template, request as req, send_from_directory
 from localStoragePy import localStoragePy as lsp
 from flask_socketio import SocketIO
 from flaskwebgui import FlaskUI
@@ -42,6 +43,28 @@ def instance_check():
         U32DLL.SetForegroundWindow(hwnd)
         sys.exit(0)
     return True
+
+
+def get_system_default_browser():
+    chosen_browser = None
+    try:
+        from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
+
+        with OpenKey(HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice') as regkey:
+            # Get the user choice
+            browser_choice = QueryValueEx(regkey, 'ProgId')[0]
+
+        with OpenKey(HKEY_CLASSES_ROOT, r'{}\shell\open\command'.format(browser_choice)) as regkey:
+            # Get the application the user's choice refers to in the application registrations
+            browser_path_tuple = QueryValueEx(regkey, None)
+
+            # This is a bit sketchy and assumes that the path will always be in double quotes
+            chosen_browser = browser_path_tuple[0].split('"')[1]
+
+    except Exception:
+        print('Failed to look up default browser in system registry. Using fallback value.')
+    return chosen_browser
+
 
 class Model:
     def __init__(self, socketio: SocketIO):
@@ -246,6 +269,10 @@ if __name__ == "__main__" and instance_check():
     def hello_world():
         return render_template("index.html", quests=m.quests, dups=m.duplicates, doneQ=m.done, not_syncing=m.stop_event.is_set())
     
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(resource_path('static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
     @app.route("/sync", methods=['POST'])
     def start_sync():
         if m.stop_event.is_set() and not (len(m.duplicates) > 0):
@@ -284,5 +311,5 @@ if __name__ == "__main__" and instance_check():
             return redirect("/")
         return "BAD!!!", 404
 
-    # socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
-    FlaskUI(app=app, socketio=socketio, server="flask_socketio", fullscreen=False, width=725, height=950).run()
+    # socketio.run(app=app, host="0.0.0.0", port=3000)
+    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=725, height=950).run()
