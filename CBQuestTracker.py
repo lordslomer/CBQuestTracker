@@ -1,6 +1,8 @@
+from flask import Flask, redirect, render_template, request as req
 from localStoragePy import localStoragePy as lsp
+from flask_socketio import SocketIO
+from flaskwebgui import FlaskUI
 from typing import List, Tuple
-from ctypes import WinDLL  # TODO
 from PIL import ImageGrab
 import numpy as np
 import regex as re
@@ -10,6 +12,8 @@ import requests
 import os, sys
 import json
 import cv2
+
+from ctypes import WinDLL #look into
 
 def global_constants():
     naughty_dict = {
@@ -38,55 +42,48 @@ def instance_check():
         sys.exit(0)
     return True
 
-
-# class Controller:
-#     def __init__(self):
-#         self.m = Model()
-
-#     def sync_pressed(self):
-#         not_syncing = self.m.stop_event.is_set()
-#         if not_syncing:
-#             self.m.start_sync_thread()
-#         else:
-#             self.m.stop_event.set()
-
-
 class Model:
-    def __init__(self):
+    def __init__(self, socketio: SocketIO):
         self.vocabulary = requests.get(url + "/quests").json()
+        self.db = lsp("CBQuestTracker", "json")
         self.stop_event = threading.Event()
         self.sync_thread = None
         self.stop_event.set()
-        self.db = lsp("CBQuestTracker", "json")
         self.__read_state()
+        self.io = socketio
 
     def __read_state(self):
         db = self.db.getItem("db")
         if db is not None:
             db = json.loads(db)
-            self.quests: List[Tuple[int, str]] = list(map(tuple, db["quests"]))
+            self.quests: List[str] = list(db["quests"])
             self.duplicates = db["duplicates"]
+            self.done = db["done"]
         else:
-            self.__write_state(set(), [])
+            self.__write_state(set())
 
-    def __write_state(self, dq, pd):
+    def __write_state(self, dq, pd=[], done=[]):
         if isinstance(dq, set):
-            self.quests: List[Tuple[int, str]] = list(enumerate(dq))
+            self.quests: List[str] = list(dq)
         elif isinstance(dq, list):
-            self.quests: List[Tuple[int, str]] = dq
+            self.quests: List[str] = dq
 
         self.duplicates = pd
+        self.done = done
         self.db.setItem(
             "db",
-            json.dumps({"quests": list(self.quests), "duplicates": self.duplicates}),
+            json.dumps({"quests": self.quests, "duplicates": self.duplicates, "done": self.done}),
         )
 
     def __send_screen(self):
         img = np.array(ImageGrab.grab(bbox=(1200, 435, 1850, 890)))
         _, img_png = cv2.imencode(".png", img)
         img_string = img_png.tobytes()
-        r = requests.post(url + "/upload", data=img_string, headers=headers)
-        return r.json()
+        try:
+            r = requests.post(url + "/upload", data=img_string, headers=headers)
+            return r.json()
+        except:
+            return []
 
     def __score_quest(self, quest):
         if quest[-1] != "." and len(quest) < max_quest_lenth:
@@ -118,23 +115,24 @@ class Model:
         scores.sort()
         return scores, quest
 
-    def __clean_duplicates(self, dq, pd):
-        dups_to_delete_from_detected = []
+    def __add_quest_to_dict(self, new, dq, pd):
+        stripped_new = re.sub(r"\d+", "", new)
         for q in dq:
-            rest = dq.copy()
-            rest.remove(q)
             stripped_q = re.sub(r"\d+", "", q)
-            duplicates = list(
-                filter(lambda r: stripped_q == re.sub(r"\d+", "", r), rest)
-            )
-            dup_pair = sorted([q] + duplicates)
-            if len(duplicates) > 0:
-                if q not in dups_to_delete_from_detected:
-                    dups_to_delete_from_detected += duplicates
-                if dup_pair not in pd:
-                    # print("Found and flagged duplicate")
-                    pd.append(dup_pair)
-        dq -= set(dups_to_delete_from_detected)
+            if stripped_new == stripped_q:
+                index = -1 
+                for i, dups in enumerate(pd):
+                    for dup in dups:
+                        if dup == q:
+                            index = i
+                            break
+                
+                if index > -1:
+                    pd[index] = sorted(pd[index] + [new])
+                else:
+                    pd += [sorted([new, q])]
+                return
+        dq.add(new)
 
     def __flatten_dups(self, pd):
         return [dup for dup_list in pd for dup in dup_list]
@@ -142,7 +140,7 @@ class Model:
     def __sync_with_game(self):
         dq = set()
         pd = []
-        self.__write_state(dq, pd)
+        self.__write_state(dq)
         while not self.stop_event.is_set():
             for quest in self.__send_screen():
 
@@ -154,11 +152,12 @@ class Model:
                 exists_in_dq = entry_to_add[1] not in dq
                 exists_in_pd = entry_to_add[1] not in self.__flatten_dups(pd)
                 if exists_in_dq and exists_in_pd:
-                    old_length = len(dq)
-                    dq.add(entry_to_add[1])
-                    self.__clean_duplicates(dq, pd)
-                    if len(dq) - old_length > 0:
+                    old_dq = len(dq)
+                    old_pd = len(self.__flatten_dups(pd))
+                    self.__add_quest_to_dict(entry_to_add[1], dq, pd)
+                    if len(dq) - old_dq > 0 or len(self.__flatten_dups(pd)) - old_pd:
                         self.__write_state(dq, pd)
+                        self.io.emit("new_quest", {"dq" : self.quests, "pd" : self.duplicates})
 
     def start_sync_thread(self):
         self.stop_event.clear()
@@ -166,9 +165,104 @@ class Model:
         self.sync_thread.daemon = True
         self.sync_thread.start()
 
-    def get_data(self):
-        return self.quests
+    def update_sorted_list(self, input):
+        if sorted(input) == sorted(self.quests):
+            self.__write_state(input, self.duplicates, self.done)
+            return True
+        else:
+            return False
+
+    def mark_quest_done(self, index):
+        if 0 <= index < len(self.quests):
+            match = self.quests[index]
+            self.quests.remove(match)
+            self.done = [match] + self.done
+            self.__write_state(self.quests ,self.duplicates, self.done)
+            return True
+        return False
+    
+    def unmark_quest_done(self, form):
+        if "done" in form and form['done'] in self.done:
+            self.done.remove(form['done'])
+            self.quests.append(form['done'])
+            self.__write_state(self.quests ,self.duplicates, self.done)
+            return True
+        return False
+
+    def __find_duplicates_in_quests(self):
+        for dup in self.duplicates[0]:
+            for index, quest in enumerate(self.quests):
+                if quest == dup:
+                    return index,dup
+        return -1, ""
+    
+    def remove_duplicates(self, form):
+        if "dup" in form:
+            dup = form['dup']
+            pair = self.duplicates[0]
+            if dup in pair:
+                index, found = self.__find_duplicates_in_quests()
+                if index > -1:
+                    if found != dup:
+                        self.quests[index] = dup
+                    self.duplicates = self.duplicates[1:]
+                    self.__write_state(self.quests, self.duplicates, self.done)
+                    return True
+        return False
 
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()
+
+    app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
+    app.config['SECRET_KEY'] = 'secret!'
+    socketio = SocketIO(app)
+
+    m = Model(socketio)
+    
+    @app.route('/')
+    def hello_world():
+        return render_template("index.html", quests=m.quests, dups=m.duplicates, doneQ=m.done, not_syncing=m.stop_event.is_set())
+    
+    @app.route("/sync", methods=['POST'])
+    def start_sync():
+        if m.stop_event.is_set() and not (len(m.duplicates) > 0):
+            m.start_sync_thread()
+            return redirect("/")
+        return "BAD!!!", 404
+    
+    @app.route("/stop", methods=['POST'])
+    def stop_sync():
+        if not m.stop_event.is_set():
+            m.stop_event.set()
+            return redirect("/")
+        return "BAD!!!", 404
+    
+    @app.route("/update", methods=['POST'])
+    def update_list():
+        if m.stop_event.is_set() and m.update_sorted_list(req.json):
+            return redirect("/")
+        return "BAD!!", 400
+        
+    @app.route("/done/<int:index>", methods=['POST'])
+    def quest_done(index):
+        if m.stop_event.is_set() and m.mark_quest_done(index):
+            return redirect(f"/")
+        return "BAD!!!", 404
+        
+    @app.route("/undone", methods=['POST'])
+    def quest_undone():
+        if m.stop_event.is_set() and m.unmark_quest_done(req.form):
+            return redirect("/")
+        return "BAD!!!", 404
+
+    @app.route("/dups", methods=['post'])
+    def remove_duplicate():
+        if m.stop_event.is_set() and m.remove_duplicates(req.form): 
+            return redirect("/")
+        return "BAD!!!", 404
+
+    socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
+    # FlaskUI(app=app, socketio=socketio, server="flask_socketio", fullscreen=False, width=725, height=950).run()
+
+
 

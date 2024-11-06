@@ -1,10 +1,11 @@
 localStoragePy
+flask-socketio
 opencv-python
-customtkinter
+flaskwebgui
 pyinstaller
 jellyfish
 requests
 Pillow
 numpy
 regex
-ttkbootstrap
+flask

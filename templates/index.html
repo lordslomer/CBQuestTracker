@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/css/main.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400&display=swap" rel="stylesheet">
+  <title>CBQuestTracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
+    integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
+    crossorigin="anonymous"></script>
+  <script src="https://raw.githack.com/SortableJS/Sortable/master/Sortable.js"></script>
+</head>
+
+<body class="bg-dark-100 text-gray-300 h-dvh min-w-[700px] font-open font-bold text-lg">
+
+  <!-- Main Container -->
+  <main class="w-[700px] mx-auto h-full flex-col px-4 pt-4">
+
+    <!-- Top Row -->
+    <div class="grid h-24 grid-cols-3 mb-5 mx-2 bg-dark-200 rounded-xl shadow-md">
+
+      <!-- Quests Stats -->
+      <div class="mr-5 flex col-span-2 p-3 justify-evenly items-center">
+        {% if not_syncing %}
+
+        {% if quests|length + doneQ|length > 0 %}
+        <p>Quests Done:</p>
+        <p> {{ doneQ|length }} / {{ doneQ|length + quests|length }}</p>
+        {% else %}
+        <p class="flex items-center">Sync to Track:</p>
+        {% endif %}
+
+        {% else %}
+        <div class="flex justify-between items-center">
+          <span class="relative flex h-3 w-3 mr-4">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+          </span>
+          <p id="nbrquests" class="flex items-center mr-4">
+            Syncing{% if quests|length > 0 %} - {{ quests|length }}{% endif %}
+          </p>
+          <p id="nbrdups">
+            {% if dups|length > 0 %}
+            Found <span class="text-red-400">{{ dups|length }}</span> duplicates.
+            {% endif %}
+          </p>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Sync Area -->
+      <div class="ml-5 flex p-3 justify-center items-center">
+        {% if not_syncing %}
+
+        <form action="/sync" method="post">
+          <button class="bg-blue-700 hover:bg-blue-800 py-2 px-10 rounded">Sync</button>
+        </form>
+
+        {% else %}
+
+        <form action="/stop" method="post">
+          <button class="bg-red-700 hover:bg-red-800 py-2 px-10 rounded">Stop</button>
+        </form>
+
+        {% endif %}
+      </div>
+
+    </div>
+
+
+
+    <div id="mainscrollable" class="overflow-auto max-h-[calc(100vh-8.25rem)]">
+      {% if quests|length + doneQ|length > 0 %}
+
+
+      <!-- Quest List -->
+      <div id="questlist" class="p-2 space-y-4">
+        {% for quest in quests %}
+        <div data-id="{{ quest }}" class="bg-dark-200 rounded-xl shadow-md flex items-center">
+
+          {% if not_syncing %}
+          <span class="drag text-3xl flex cursor-grab items-center justify-center p-4 select-none ">&#8942;</span>
+          {% endif %}
+
+          <p class="p-4 border-l-2 flex-grow border-dark-100 regex-target">{{ quest }}</p>
+
+          {% if not_syncing %}
+          <form action="/done/{{ loop.index0 }}" method="post"
+            class="flex items-center justify-center p-4 relative right-0">
+            <button class="bg-dark-300 px-4 py-2 rounded-xl  hover:scale-110 shadow-md">
+              &check;
+            </button>
+          </form>
+          {% endif %}
+
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Done List -->
+      <div class="p-2 space-y-4">
+        {% for done in doneQ %}
+        <div id="{{ 'topdone' if loop.first else '' }}"
+          class="rounded-xl shadow-md flex bg-dark-100 border-2 border-dark-200 items-center">
+          <p class="p-4 flex-grow brightness-50 regex-target">{{ done }}</p>
+          {% if not_syncing %}
+          <form action="/undone" method="post" class="flex items-center justify-center p-4 relative right-0">
+            <input name="done" value="{{ done }}" class="hidden" />
+            <button class="bg-blue-700 px-4 py-2 rounded-xl  hover:scale-110 shadow-md">
+              &check;
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+
+      <!-- No Quests -->
+      {% else %}
+
+      {% if not_syncing %}
+      <div class="mx-2 p-8 space-y-4 bg-dark-200 rounded-xl">
+        <p>There are no quests, scan to get them:</p>
+        <p>1. Press the Sync button.</p>
+        <p>2. Scroll through your unit quests in-game.</p>
+        <p>3. Make sure nothing is blocking the quests while your scrolling.</p>
+      </div>
+      {% else %}
+      <div id="questlist" class="flex flex-col p-2 space-y-4 items-center">
+        <div
+          class="h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] text-red-600"
+          role="status">
+          <span
+            class="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+        </div>
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+
+  </main>
+
+  <!-- Duplicates Modal -->
+  {% if dups|length > 0 and not_syncing %}
+  <div class="absolute left-0 top-0 w-screen h-screen flex items-center justify-center backdrop-brightness-50">
+
+    <div class="flex flex-col items-center bg-dark-100 p-12 rounded-md shadow-md lg:space-y-12">
+      <div>
+        <h1>Found {{dups|first|length}} duplicates while scanning. <br> Please choose the correct one:</h1>
+        <h1 class="text-center text-red-500">{{dups|length}} duplicate type{{ 's' if dups|length > 1 else '' }} left!
+        </h1>
+      </div>
+      <div class="lg:grid lg:grid-cols-2 lg:gap-12 max-h-96 max-lg:space-y-4 overflow-auto p-4">
+        {% for candidate in dups|first %}
+        <form action="/dups" method="post">
+          <input class="hidden" name="dup" value="{{ candidate }}">
+          <button class="p-10 bg-dark-200 rounded-md shadow-md border-2 border-dark-100 hover:border-dark-300 max-w-lg">
+            <p class="regex-target">{{ candidate }}</p>
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
+
+</body>
+<script type="text/javascript" charset="utf-8">
+  async function updateQuestList(list) {
+    await fetch("/update", {
+      method: 'POST',
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(list)
+    })
+  }
+
+  document.addEventListener("DOMContentLoaded", function (event) {
+    var scrollpos = localStorage.getItem('scrollpos');
+    if (scrollpos) document.querySelector("#mainscrollable").scrollTo(0, scrollpos, {
+      behavior: "smooth"
+    });
+  });
+
+  document.querySelector("#mainscrollable").onscroll = function (e) {
+    localStorage.setItem('scrollpos', e.target.scrollTop);
+  };
+
+  [...document.querySelectorAll(".regex-target")].forEach(ptag => {
+    ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>")
+  })
+
+  function style_grab(e) {
+    e.target.classList.remove('cursor-grabbing');
+    if (!e.item || !e.item.children) return
+    e.item.children[0].classList.remove('cursor-grabbing');
+    e.item.children[0].classList.add('cursor-grab');
+  }
+  function style_grabbing(e) {
+    e.target.classList.add('cursor-grabbing');
+    if (!e.item || !e.item.children) return
+    e.item.children[0].classList.add('cursor-grabbing');
+    e.item.children[0].classList.remove('cursor-grab');
+  }
+  let sortable = Sortable.create(questlist, {
+    selectedClass: "selectedQuest",
+    forceAutoScrollFallback: true,
+    ghostClass: "ghostQuest",
+    scrollSensitivity: 100,
+    fallbackTolerance: 30,
+    forceFallback: true,
+    multiDrag: true,
+    handle: '.drag',
+    scrollSpeed: 15,
+    animation: 150,
+    scroll: true,
+    onEnd: (e) => {
+      for (let i in e.items) {
+        Sortable.utils.deselect(e.items[i]);
+      }
+      style_grab(e)
+    },
+    setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
+    onSort: () => updateQuestList(sortable.toArray()),
+    onChoose: style_grabbing,
+    onStart: style_grabbing,
+    onUnchoose: style_grab,
+    onMove: style_grabbing
+  })
+
+  let socket = io();
+  socket.on('connect', function () {
+    socket.on('new_quest', function ({ dq, pd }) {
+
+      let questlist = document.querySelector("#questlist")
+      questlist.classList.remove("items-center")
+      questlist.innerHTML = dq.map(quest =>
+        `<div data-id="${quest}" class="bg-dark-200  rounded-xl shadow-md flex items-center">
+          <p class="p-4 regex-target">${quest.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>")}</p>
+        </div>`
+      ).join("")
+
+      document.querySelector("#nbrquests").innerHTML = `Syncing - ${dq.length}`
+
+      if (pd.length > 0)
+        document.querySelector("#nbrdups").innerHTML = `Found <span class="text-red-400">${pd.length}</span> duplicates.`
+    })
+  });
+</script>
+
+</html>

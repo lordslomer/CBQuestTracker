@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --selectedBorder: theme(colors.blue.700)
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: #292929;
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #3d3d3d;
+  border-radius: 5px;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #535353;
+}
+
+.scrollgutter {
+  scrollbar-gutter: stable;
+}
+
+.selectedQuest {
+  border-left: 5px solid var(--selectedBorder);
+  z-index: 1 !important;
+}
+
+p{
+  user-select: none;
+}
