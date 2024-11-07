@@ -91,7 +91,7 @@ class Model:
                 self.__write_state(**db)
 
             self.force_screen_pick = False
-            self.mons = [mon.x,mon.y,mon.width,mon.height, "MAIN"]    
+            self.mons = [[mon.x,mon.y,mon.width,mon.height, "MAIN"]  ]  
                 
     def __read_vocab(self):
         vocabName = resource_path("./vocabulary.json")
