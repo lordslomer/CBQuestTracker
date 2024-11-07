@@ -203,7 +203,7 @@
 
   //Save the Window's last position
   window.onbeforeunload = function () {
-    sendPostReq("/windowInfo", [window.screenX, window.screenY, window.outerWidth, window.outerHeight])
+    sendPostReq("/window", [window.screenX, window.screenY, window.outerWidth, window.outerHeight])
   }
 
   // Sortable List 

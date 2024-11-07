@@ -1,5 +1,5 @@
-from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
 from flask import Flask, redirect, render_template, request as req, send_from_directory
+from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
 from localStoragePy import localStoragePy as lsp
 from flask_socketio import SocketIO
 from flaskwebgui import FlaskUI
@@ -9,6 +9,7 @@ from typing import List
 import numpy as np
 import pytesseract
 import regex as re
+import screeninfo
 import threading
 import jellyfish
 import os, sys
@@ -48,19 +49,12 @@ def instance_check():
 def get_system_default_browser():
     chosen_browser = None
     try:
-        from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
-
         with OpenKey(HKEY_CURRENT_USER, r'SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice') as regkey:
-            # Get the user choice
             browser_choice = QueryValueEx(regkey, 'ProgId')[0]
 
         with OpenKey(HKEY_CLASSES_ROOT, r'{}\shell\open\command'.format(browser_choice)) as regkey:
-            # Get the application the user's choice refers to in the application registrations
             browser_path_tuple = QueryValueEx(regkey, None)
-
-            # This is a bit sketchy and assumes that the path will always be in double quotes
-            chosen_browser = browser_path_tuple[0].split('"')[1]
-
+            chosen_browser = browser_path_tuple[0].split('"')[1]    
     except Exception:
         print('Failed to look up default browser in system registry. Using fallback value.')
     return chosen_browser
@@ -74,43 +68,55 @@ class Model:
         self.sync_thread = None
         self.stop_event.set()
         self.io = socketio
-        self.__read_state()
+        self.__scan_monitors()
 
     # App State
+    def __scan_monitors(self):
+        monitors = screeninfo.get_monitors()
+        nbr_mons = len(monitors)
+        db = self.__read_state()
+
+        if nbr_mons > 1:
+            chosen_screen_index = db['screen']
+            if 0 <= chosen_screen_index < nbr_mons:
+                self.force_screen_pick = False
+            else:
+                self.force_screen_pick = True
+        else:
+            # Very bad...
+            mon = monitors[0]
+            if not mon or not mon.is_primary:
+                sys.exit("How is there no monitor connected!!!")
+
+            db.update({"screen" : 0})
+            self.__write_state(**db)
+            self.force_screen_pick = False
+        self.mons = monitors
+                
     def __read_vocab(self):
-        dbName = resource_path("vocabulary.json")
-        if os.path.isfile(dbName):
-            with open(dbName, "r") as f:
-                db = json.load(f)
+        vocabName = resource_path("vocabulary.json")
+        if os.path.isfile(vocabName):
+            with open(vocabName, "r") as f:
+                vocab = json.load(f)
                 f.close()
         else:
-            db = []
-        return db
+            vocab = []
+        return vocab
 
     def __read_state(self):
         db = self.db.getItem("db")
-        if db is not None:
-            db = json.loads(db)
-            self.quests: List[str] = list(db["quests"])
-            self.duplicates = db["duplicates"]
-            self.done = db["done"]
-            self.last_window_cords = db['lastWindowCords']
+        if db is not None and "quests" in db and "duplicates" in db and "done" in db and "window" in db and "screen" in db:
+            return json.loads(db)
         else:
-            self.__write_state(set())
+            self.__write_state([])
+            return self.__read_state()
 
-    def __write_state(self, quests, duplicates=[], done=[], last_window_cords=[0,0,725,950]):
-        if isinstance(quests, set):
-            self.quests: List[str] = list(quests)
-        elif isinstance(quests, list):
-            self.quests: List[str] = quests
+    def __write_state(self, quests, duplicates=[], done=[], window=[0,0,725,950], screen=0):
+        db = json.dumps({"quests": quests, "duplicates": duplicates, "done": done, "window": window, "screen":screen})
+        self.db.setItem("db",db)
 
-        self.duplicates = duplicates
-        self.done = done
-        self.last_window_cords = last_window_cords
-        self.db.setItem(
-            "db",
-            json.dumps({"quests": self.quests, "duplicates": self.duplicates, "done": self.done, "lastWindowCords": self.last_window_cords}),
-        )
+    def get_state(self):
+        return self.__read_state()
 
 
     # Sync Thread
@@ -192,7 +198,9 @@ class Model:
     def __sync_with_game(self):
         dq = set()
         pd = []
-        self.__write_state(dq, last_window_cords=self.last_window_cords)
+        db = self.__read_state()
+        db.update({"quests":list(dq), "duplicates" : pd, "done": []})
+        self.__write_state(**db)
         while not self.stop_event.is_set():
             for quest in self.__grab_quests_from_screen():
 
@@ -208,8 +216,10 @@ class Model:
                     old_pd = len(self.__flatten_dups(pd))
                     self.__add_quest_to_dict(entry_to_add[1], dq, pd)
                     if len(dq) - old_dq > 0 or len(self.__flatten_dups(pd)) - old_pd:
-                        self.__write_state(dq, pd, last_window_cords=self.last_window_cords)
-                        self.io.emit("new_quest", {"dq" : self.quests, "pd" : self.duplicates})
+                        db = self.__read_state()
+                        db.update({"quests":list(dq), "duplicates" : pd, "done": []})
+                        self.__write_state(**db)
+                        self.io.emit("new_quest", {"dq" : list(dq), "pd" : pd})
 
     def start_sync_thread(self):
         self.stop_event.clear()
@@ -220,53 +230,70 @@ class Model:
 
     # Serverside Actions
     def update_sorted_list(self, input):
-        if sorted(input) == sorted(self.quests):
-            self.__write_state(input, self.duplicates, self.done, self.last_window_cords)
+        db = self.__read_state()
+        if sorted(input) == sorted(db['quests']):
+            db.update({"quests":input})
+            self.__write_state(**db)
             return True
         else:
             return False
 
     def mark_quest_done(self, index):
-        if 0 <= index < len(self.quests):
-            match = self.quests[index]
-            self.quests.remove(match)
-            self.done = [match] + self.done
-            self.__write_state(self.quests ,self.duplicates, self.done, self.last_window_cords)
+        db = self.__read_state()
+        quests = db['quests']
+        done = db['done']
+        if 0 <= index < len(quests):
+            match = quests[index]
+            quests.remove(match)
+            done = [match] + done
+            db.update({"quests":quests, "done":done})
+            self.__write_state(**db)
             return True
         return False
     
     def unmark_quest_done(self, form):
-        if "done" in form and form['done'] in self.done:
-            self.done.remove(form['done'])
-            self.quests.append(form['done'])
-            self.__write_state(self.quests ,self.duplicates, self.done, self.last_window_cords)
+        db = self.__read_state()
+        quests = db['quests']
+        done = db['done']
+        if "done" in form and form['done'] in done:
+            done.remove(form['done'])
+            quests.append(form['done'])
+            db.update({"quests":quests, "done":done})
+            self.__write_state(**db)
             return True
         return False
 
-    def __find_duplicates_in_quests(self):
-        for dup in self.duplicates[0]:
-            for index, quest in enumerate(self.quests):
+    def __find_duplicates_in_quests(self, quests, dups):
+        for dup in dups[0]:
+            for index, quest in enumerate(quests):
                 if quest == dup:
                     return index,dup
         return -1, ""
     
     def remove_duplicates(self, form):
+        db = self.__read_state()
+        quests = db['quests']
+        dups = db['duplicates']
         if "dup" in form:
             dup = form['dup']
-            pair = self.duplicates[0]
+            pair = dups[0]
             if dup in pair:
-                index, found = self.__find_duplicates_in_quests()
+                index, found = self.__find_duplicates_in_quests(quests,dups)
                 if index > -1:
                     if found != dup:
-                        self.quests[index] = dup
-                    self.duplicates = self.duplicates[1:]
-                    self.__write_state(self.quests, self.duplicates, self.done, self.last_window_cords)
+                        quests[index] = dup
+                    dups = dups[1:]
+                    db.update({"quests": quests, "duplicates":dups})
+                    self.__write_state(**db)
                     return True
         return False
 
     def save_last_window_cords(self, cords):
-        if len(cords) == 4 and cords != self.last_window_cords:
-            self.__write_state(self.quests, self.duplicates, self.done, cords)
+        db = self.__read_state()
+        saved_cords = db['window']
+        if len(cords) == 4 and cords != saved_cords:
+            db.update({"window": cords})
+            self.__write_state(**db)
             return True
         return False
 
@@ -275,7 +302,8 @@ def define_routes(app):
 
     @app.route('/')
     def hello_world():
-        return render_template("index.html", quests=m.quests, dups=m.duplicates, doneQ=m.done, not_syncing=m.stop_event.is_set())
+        db = m.get_state()
+        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set())
     
     @app.route('/favicon.ico')
     def favicon():
@@ -283,55 +311,56 @@ def define_routes(app):
 
     @app.route("/sync", methods=['POST'])
     def start_sync():
-        if m.stop_event.is_set() and not (len(m.duplicates) > 0):
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0):
             m.start_sync_thread()
             return redirect("/")
         return "BAD!!!", 404
     
     @app.route("/stop", methods=['POST'])
     def stop_sync():
-        if not m.stop_event.is_set():
+        if not m.force_screen_pick and not m.stop_event.is_set():
             m.stop_event.set()
             return redirect("/")
         return "BAD!!!", 404
     
     @app.route("/update", methods=['POST'])
     def update_list():
-        if m.stop_event.is_set() and m.update_sorted_list(req.json):
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0)  and m.update_sorted_list(req.json):
             return redirect("/")
-        return "BAD!!", 400
+        return "BAD!!!", 404
         
     @app.route("/done/<int:index>", methods=['POST'])
     def quest_done(index):
-        if m.stop_event.is_set() and m.mark_quest_done(index):
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0)  and m.mark_quest_done(index):
             return redirect(f"/")
         return "BAD!!!", 404
         
     @app.route("/undone", methods=['POST'])
     def quest_undone():
-        if m.stop_event.is_set() and m.unmark_quest_done(req.form):
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0)  and m.unmark_quest_done(req.form):
             return redirect("/")
         return "BAD!!!", 404
 
     @app.route("/dups", methods=['post'])
     def remove_duplicate():
-        if m.stop_event.is_set() and m.remove_duplicates(req.form): 
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and m.remove_duplicates(req.form): 
             return redirect("/")
         return "BAD!!!", 404
     
-    @app.route("/windowInfo", methods=['POST'])
+    @app.route("/window", methods=['POST'])
     def recive_window_info():
         if m.save_last_window_cords(req.json):
             return redirect("/")
-        else:
-            return "BAD!!!", 404
+        return "BAD!!!", 404
 
 
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()
-
-    # import screeninfo
-    # print(screeninfo.get_monitors())
 
     # Flask API as Controller, serves HTML as View
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
@@ -340,8 +369,9 @@ if __name__ == "__main__" and instance_check():
 
     # Model class containing all the logic.
     m = Model(socketio)
-    
+    db = m.get_state()
+
     # display the website in a isolated tab, current default browser is used. 
-    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=m.last_window_cords[2], height=m.last_window_cords[3])    
-    flaskui.browser_command.append(f"--window-position={",".join(list(map(str,m.last_window_cords[:2])))}")
+    flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=db['window'][2], height=db['window'][3])    
+    flaskui.browser_command.append(f"--window-position={",".join(list(map(str,db['window'][:2])))}")
     flaskui.run()
