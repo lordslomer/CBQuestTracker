@@ -131,7 +131,7 @@ class Model:
 
     # Sync Thread
     def __process_img(self, img):
-        # cv2.imwrite("test.png",img)
+        cv2.imwrite("test.png",img)
         mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
         mask_blue = cv2.inRange(img, np.array([50, 40, 10]), np.array([250, 180, 40]))
         mask = mask_white + mask_blue
@@ -338,7 +338,7 @@ def define_routes(app):
     @app.route('/')
     def hello_world():
         db = m.get_state()
-        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set(), forceScreen=m.force_screen_pick, screens=m.mons)
+        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set(), forceScreen=m.force_screen_pick, screens=m.mons, chosenScreen=db['screen'])
     
     @app.route('/favicon.ico')
     def favicon():
@@ -416,7 +416,7 @@ if __name__ == "__main__" and instance_check():
     # Flask API as Controller, serves HTML as View
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
     define_routes(app)
-    socketio = SocketIO(app, async_mode='gevent')
+    socketio = SocketIO(app, async_mode='threading')
 
     # Model class containing all the logic.
     m = Model(socketio)
