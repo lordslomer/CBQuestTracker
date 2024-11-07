@@ -416,7 +416,7 @@ if __name__ == "__main__" and instance_check():
     # Flask API as Controller, serves HTML as View
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
     define_routes(app)
-    socketio = SocketIO(app, async_mode='threading')
+    socketio = SocketIO(app, async_mode='gevent')
 
     # Model class containing all the logic.
     m = Model(socketio)
