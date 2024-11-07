@@ -4,9 +4,6 @@ module.exports = {
   plugins: [],
   theme: {
     extend: {
-      fontFamily: {
-        open: ['"Open Sans"'],
-      },
       colors: {
         primary: {
           100: '#2e20e8',

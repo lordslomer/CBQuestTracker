@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/static/css/main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400&display=swap" rel="stylesheet">
+
   <title>CBQuestTracker</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"
     integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA=="
@@ -15,7 +15,7 @@
   <script src="https://raw.githack.com/SortableJS/Sortable/master/Sortable.js"></script>
 </head>
 
-<body class="bg-dark-100 text-gray-300 h-dvh min-w-[700px] font-open font-bold text-lg">
+<body class="bg-dark-100 text-gray-300 h-dvh min-w-[700px]font-bold text-lg">
 
   <!-- Main Container -->
   <main class="w-[700px] mx-auto h-full flex-col px-4 pt-4">
@@ -176,7 +176,7 @@
 
   //Post Request Template
   async function sendPostReq(url, list) {
-    await fetch(url, {
+    return await fetch(url, {
       method: 'POST',
       headers: {
         "Content-Type": "application/json",
@@ -188,9 +188,7 @@
   //Retain scroll
   document.addEventListener("DOMContentLoaded", function (event) {
     var scrollpos = localStorage.getItem('scrollpos');
-    if (scrollpos) document.querySelector("#mainscrollable").scrollTo(0, scrollpos, {
-      behavior: "smooth"
-    });
+    if (scrollpos) document.querySelector("#mainscrollable").scrollTop = scrollpos;
   });
   document.querySelector("#mainscrollable").onscroll = function (e) {
     localStorage.setItem('scrollpos', e.target.scrollTop);
@@ -239,7 +237,9 @@
         style_grab(e)
       },
       setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
-      onSort: () => sendPostReq("/update", sortable.toArray()),
+      onSort: () => sendPostReq("/update", sortable.toArray()).then(res => {
+        if (res.status == 200) window.location = "/"
+      }),
       onChoose: style_grabbing,
       onStart: style_grabbing,
       onUnchoose: style_grab,

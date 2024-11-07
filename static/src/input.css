@@ -26,7 +26,10 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #535353;
 }
-
+body{
+    font-family: Tahoma, sans-serif;
+    font-weight: 600;
+}
 .scrollgutter {
   scrollbar-gutter: stable;
 }

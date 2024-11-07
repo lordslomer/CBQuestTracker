@@ -921,10 +921,6 @@ video {
   vertical-align: -0.125em;
 }
 
-.font-open {
-  font-family: "Open Sans";
-}
-
 .text-3xl {
   font-size: 1.875rem;
   line-height: 2.25rem;
@@ -1016,6 +1012,11 @@ video {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #535353;
+}
+
+body{
+  font-family: Tahoma, sans-serif;
+  font-weight: 600;
 }
 
 .scrollgutter {

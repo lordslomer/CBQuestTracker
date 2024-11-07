@@ -328,7 +328,7 @@ def define_routes(app):
     def update_list():
         db = m.get_state()
         if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0)  and m.update_sorted_list(req.json):
-            return redirect("/")
+            return "OK!", 200
         return "BAD!!!", 404
         
     @app.route("/done/<int:index>", methods=['POST'])
