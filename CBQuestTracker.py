@@ -122,7 +122,7 @@ class Model:
             boundries = (m.x, m.y,m.x+m.width,m.y+m.height)
             name = f"/{re.sub(r"[\\\.]+",'',m.name)}"
         screen = ImageGrab.grab(bbox=boundries, all_screens=True)
-        screen.save(f"./static/imgs{name}.png")
+        screen.save(resource_path(f"./static/imgs{name}.png"))
         return name
 
     def get_state(self):
@@ -131,7 +131,7 @@ class Model:
 
     # Sync Thread
     def __process_img(self, img):
-        cv2.imwrite("test.png",img)
+        # cv2.imwrite("test.png",img)
         mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
         mask_blue = cv2.inRange(img, np.array([50, 40, 10]), np.array([250, 180, 40]))
         mask = mask_white + mask_blue
