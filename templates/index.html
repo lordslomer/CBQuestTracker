@@ -21,10 +21,11 @@
   <main class="w-[700px] mx-auto h-full flex-col px-4 pt-4">
 
     <!-- Top Row -->
-    <div class="grid h-24 grid-cols-5 mb-5 mx-2 bg-dark-200 rounded-xl shadow-md">
+    <div
+      class="grid h-24 {{ 'grid-cols-5' if not_syncing else 'grid-cols-3' }}  mb-5 mx-2 bg-dark-200 rounded-xl shadow-md">
 
       <!-- Quests Stats -->
-      <div class="mr-5 flex col-span-3 p-3 justify-evenly items-center">
+      <div class="mr-5 flex {{ 'col-span-3' if not_syncing else 'col-span-2' }} p-3 justify-evenly items-center">
         {% if not_syncing %}
 
         {% if quests|length + doneQ|length > 0 %}
@@ -36,16 +37,21 @@
 
         {% else %}
         <div class="flex justify-between items-center">
-          <span class="relative flex h-3 w-3 mr-4">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-          </span>
+          <div
+            class="h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] text-red-600 mr-4"
+            role="status">
+            <span
+              class="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
+          </div>
           <p id="nbrquests" class="flex items-center mr-4">
             Syncing{% if quests|length > 0 %} - {{ quests|length }}{% endif %}
           </p>
           <p id="nbrdups">
             {% if dups|length > 0 %}
-            Found <span class="text-red-400">{{ dups|length }}</span> duplicates.
+            Found <span class="text-red-400">{{ dups|length }}</span> duplicate{{ 's' if dups|length > 1 else '' }}.
             {% endif %}
           </p>
         </div>
@@ -53,19 +59,17 @@
       </div>
 
       <!-- Sync Area -->
-      <div class="ml-5 flex p-3 col-span-2 justify-around items-center">
+      <div class="ml-5 flex p-3 {{ 'col-span-2' if not_syncing else 'col-span-1' }} justify-around items-center">
         {% if not_syncing %}
-        {% if screens|length > 1 and 0 <= chosenScreen < screens|length %} <form action="/screen" method="post">
-          <button class="bg-dark-300 px-4 py-2 rounded shadow-md flex space-x-2 hover:brightness-90 items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
-              stroke="currentColor" class="size-6">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125Z" />
-            </svg>
-
-            <p>{{ chosenScreen + 1}}</p>
+        {% if screens|length > 1 and 0 <= chosenScreen < screens|length %} <button type="button" id="screenToggle"
+          class="bg-dark-300 px-4 py-2 rounded shadow-md flex space-x-2 hover:brightness-90 items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+            stroke="currentColor" class="size-6">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125Z" />
+          </svg>
+          <p>{{ chosenScreen + 1}}</p>
           </button>
-          </form>
           {% endif %}
           <form action="/sync" method="post">
             <button class="bg-blue-700 hover:bg-blue-800 py-2 px-10 rounded">
@@ -86,17 +90,19 @@
     <div id="mainscrollable" class="overflow-auto max-h-[calc(100vh-8.25rem)]">
       {% if quests|length + doneQ|length > 0 %}
 
-
       <!-- Quest List -->
       <div id="questlist" class="p-2 space-y-4">
         {% for quest in quests %}
-        <div data-id="{{ quest }}" class="bg-dark-200 rounded-xl shadow-md flex items-center">
+        <div data-id="{{ quest }}" quest-index="{{ loop.index0 }}"
+          class="bg-dark-200 rounded-xl shadow-md flex items-center">
 
           {% if not_syncing %}
           <span class="drag text-3xl flex cursor-grab items-center justify-center p-4 select-none ">&#8942;</span>
           {% endif %}
 
-          <p class="p-4 border-l-2 flex-grow border-dark-100 regex-target">{{ quest }}</p>
+          <p class="p-4 border-l-2 flex-grow border-dark-100 regex-target cursor-text editable-quests">{{
+            quest }}
+          </p>
 
           {% if not_syncing %}
           <form action="/done/{{ loop.index0 }}" method="post"
@@ -130,7 +136,7 @@
       {% else %}
       {% if not_syncing %}
 
-      <!-- No Quests -->
+      <!-- No Quests Instructions -->
       <div class="mx-2 p-8 space-y-4 bg-dark-200 rounded-xl">
         <p>There are no quests, scan to get them:</p>
         <p>1. Press the Sync button.</p>
@@ -141,12 +147,8 @@
 
       <!-- Syncing Quests List -->
       <div id="questlist" class="flex flex-col p-2 space-y-4 items-center">
-        <div
-          class="h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] text-red-600"
-          role="status">
-          <span
-            class="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
-        </div>
+        <p></p>
+        <img id="last_screen" class="w-full" src="" alt="" />
       </div>
       {% endif %}
       {% endif %}
@@ -159,7 +161,7 @@
   <div class="absolute left-0 top-0 w-screen h-screen flex items-center justify-center backdrop-brightness-50">
     <div class="flex flex-col items-center space-y-4 bg-dark-100 p-12 rounded-md shadow-md lg:space-y-12">
       <div>
-        <h1>Choose the screen your gonna play with:</h1>
+        <p>Choose the screen your gonna play with:</p>
       </div>
       <div class="lg:grid lg:grid-cols-2 lg:gap-12 max-h-[700px] max-lg:space-y-4 overflow-auto p-4">
         {% for screen in screens %}
@@ -212,6 +214,123 @@
     })
   }
 
+
+  //Hide screenToggleButton after click event.
+  const screenToggleButton = document.getElementById('screenToggle')
+  if (screenToggleButton)
+    screenToggleButton.addEventListener("click",
+      function (event) {
+        event.preventDefault()
+        sendPostReq("/screen", []).then(res => {
+          if (res.status == 200) window.location = "/"
+        })
+        screenToggleButton.classList.add("hidden")
+        screenToggleButton.outerHTML = `
+          <div
+          class="h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-e-transparent align-[-0.125em] text-surface motion-reduce:animate-[spin_1.5s_linear_infinite] text-blue-600"
+          role="status">
+          <span
+            class="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+        </div>
+        `
+      })
+
+
+  //Keep track of the current quest to edit
+  let selectedP = undefined
+  let selectedForm = undefined
+  //Clear current quest state
+  function deselectP() {
+    if (selectedP && selectedForm) {
+      selectedForm.parentElement.replaceChild(selectedP, selectedForm)
+      selectedP = undefined
+      selectedForm = undefined
+    }
+  }
+  //Open quest p-tags for editing.
+  document.querySelectorAll('.editable-quests').forEach(ptag => {
+
+    //On ptag click
+    ptag.ondblclick = (e) => {
+      deselectP()
+
+      //Save ptag temporarily.
+      selectedP = ptag
+      selectedPQuest = ptag.parentElement.getAttribute('data-id')
+
+      //Create form for submition
+      const newForm = document.createElement("form")
+      newForm.classList.add("flex-grow")
+      newForm.classList.add("border-l-2")
+      newForm.classList.add("border-dark-100")
+      newForm.classList.add("p-4")
+      newForm.action = "/edit"
+      newForm.method = "POST"
+      const index = document.createElement("input")
+      index.value = ptag.parentElement.getAttribute('quest-index')
+      index.name = "index"
+      index.classList.add("hidden")
+      newForm.appendChild(index)
+
+      //Create textarea
+      const newInput = document.createElement("textarea")
+      newInput.classList.add("focus:outline-none")
+      newInput.setAttribute("data-gramm", "false")
+      newInput.classList.add("border-dark-100")
+      newInput.classList.add("align-middle")
+      newInput.classList.add("bg-dark-200")
+      newInput.classList.add("resize-none")
+      newInput.classList.add("border-b-2")
+      newInput.classList.add("w-full")
+      newInput.value = selectedPQuest
+      newInput.name = "edited"
+
+      //Append textarea to form and show form instead of ptag
+      newForm.appendChild(newInput)
+      selectedForm = newForm
+      selectedP.parentElement.replaceChild(selectedForm, selectedP)
+
+      //DIRTY HACK!! Save text into hidden span to get the correct height. 
+      temp = document.createElement("span")
+      temp.innerText = newInput.value
+      selectedForm.appendChild(temp)
+
+      // Extract span highet then hide it again. 
+      temp.classList.remove("hidden")
+      tempBoundries = temp.getBoundingClientRect()
+      temp.classList.add("hidden")
+      newInput.style.height = (tempBoundries.height + 10) + "px"
+
+      newInput.focus()
+      newInput.oninput = (e) => {
+        //Clean out new lines at the end of input string
+        newInput.value = newInput.value.replaceAll(/\n/gi, "")
+        temp.innerText = newInput.value
+
+        //Update textarea's height with the hack. 
+        temp.classList.remove("hidden")
+        tempBoundries = temp.getBoundingClientRect()
+        temp.classList.add("hidden")
+        newInput.style.height = (tempBoundries.height + 10) + "px"
+
+        //Submit form on new line (enter)
+        if (e.inputType == "insertLineBreak") {
+          newInput.blur()
+        }
+      }
+      newInput.onblur = (e) => {
+        //trim sides and submit form if value has changed
+        newInput.value = newInput.value.trim()
+        if (newInput.value == selectedPQuest) {
+          deselectP()
+        } else {
+          newForm.submit()
+        }
+      }
+    }
+  })
+
+
   //Retain scroll
   document.addEventListener("DOMContentLoaded", function (event) {
     var scrollpos = localStorage.getItem('scrollpos');
@@ -221,15 +340,18 @@
     localStorage.setItem('scrollpos', e.target.scrollTop);
   };
 
+
   //Change color of Numbers
   [...document.querySelectorAll(".regex-target")].forEach(ptag => {
-    ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>")
+    ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>").replaceAll(/\bor\b(?!\s+(your|You|higher|Bandit|Field|Siege|rating|better|A)\b)/gi, "<span class='text-blue-500'> or </span>")
   })
+
 
   //Save the Window's last position
   window.onbeforeunload = function () {
     sendPostReq("/window", [window.screenX, window.screenY, window.outerWidth, window.outerHeight])
   }
+
 
   // Sortable List 
   if (document.querySelector("#questlist") != null) {
@@ -274,11 +396,45 @@
     })
   }
 
+
+  //Display toast if if url params
+  const urlParams = new URLSearchParams(window.location.search);
+  const displayToast = urlParams.get('toast')
+  if (displayToast != null) {
+    const
+      FADE_DUR = 700,
+      DUR = 3000,
+      toastContain = document.createElement('div');
+    str = "Synchronization Stopped Automatically!"
+
+    toastContain.classList.add('toastContain');
+    document.body.appendChild(toastContain);
+
+    const EL = document.createElement('div');
+    EL.classList.add("toast")
+    EL.innerHTML = str;
+    toastContain.prepend(EL);
+
+    setTimeout(() => EL.classList.add('open'));
+    setTimeout(
+      () => EL.classList.remove('open'),
+      DUR
+    );
+    setTimeout(
+      () => toastContain.removeChild(EL),
+      DUR + FADE_DUR
+    );
+  }
+  if (window.location.pathname == "/")
+    window.history.pushState({}, document.title, "/");
+
+
   //Socket connection for live updates from the Syncing Thread
   let socket = io();
   socket.on('connect', function () {
-    socket.on('new_quest', function ({ dq, pd }) {
 
+    //Quest list updated
+    socket.on('new_quest', function ({ dq, pd }) {
       let questlist = document.querySelector("#questlist")
       questlist.classList.remove("items-center")
       questlist.innerHTML = dq.map(quest =>
@@ -290,7 +446,24 @@
       document.querySelector("#nbrquests").innerHTML = `Syncing - ${dq.length}`
 
       if (pd.length > 0)
-        document.querySelector("#nbrdups").innerHTML = `Found <span class="text-red-400">${pd.length}</span> duplicates.`
+        document.querySelector("#nbrdups").innerHTML = `Found <span class="text-red-400">${pd.length}</span> duplicate${pd.length > 1 ? 's' : ''}.`
+    })
+
+    //New last image
+    socket.on('new_last', function (url) {
+      const last_screen = document.getElementById("last_screen")
+      if (last_screen) {
+        fetch(url).then(res => res.blob()).then(blob => {
+          last_screen.src = URL.createObjectURL(blob)
+          last_screen.parentElement.children[0].innerText = "Haven't found anything in a while, this is what the app sees:"
+          last_screen.parentElement.prepend(msg)
+        })
+      }
+    })
+
+    //Sync Thread Stopped after a duration of not finding quests:
+    socket.on("stopped_sync", () => {
+      window.location = "/?toast"
     })
   });
 </script>

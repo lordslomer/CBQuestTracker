@@ -13,6 +13,7 @@ import screeninfo
 import threading
 import jellyfish
 import os, sys
+import time
 import json
 import cv2
 
@@ -121,8 +122,10 @@ class Model:
         else:
             boundries = (m.x, m.y,m.x+m.width,m.y+m.height)
             name = f"/{re.sub(r"[\\\.]+",'',m.name)}"
-        screen = ImageGrab.grab(bbox=boundries, all_screens=True)
-        screen.save(resource_path(f"./static/imgs{name}.png"))
+        screen = np.array(ImageGrab.grab(bbox=boundries, all_screens=True))
+        resized = cv2.resize(screen, None, fx=0.10, fy=0.10)
+        re_colored = cv2.cvtColor(resized, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(resource_path(f"./static/imgs{name}.png"), re_colored)
         return name
 
     def get_state(self):
@@ -130,8 +133,18 @@ class Model:
 
 
     # Sync Thread
-    def __process_img(self, img):
-        cv2.imwrite("test.png",img)
+    def __process_img(self, img, last_updated):
+        q_len = len(self.__read_state()['quests'])
+        if not (q_len>0):
+            if hasattr(self, 'last_screen_sent'):
+                elapsed = time.time() - self.last_screen_sent
+            else:
+                elapsed = 0.3
+            if elapsed >= 0.3 and last_updated > 5:
+                cv2.imwrite(resource_path("./static/imgs/last.png"), cv2.cvtColor(cv2.resize(img, None, fx=0.4, fy=0.4), cv2.COLOR_RGB2BGR))
+                self.io.emit("new_last", '/static/imgs/last.png')
+                self.last_screen_sent = time.time()
+            
         mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
         mask_blue = cv2.inRange(img, np.array([50, 40, 10]), np.array([250, 180, 40]))
         mask = mask_white + mask_blue
@@ -149,14 +162,14 @@ class Model:
         quests = list(filter(None, quests))
         return quests
 
-    def __grab_quests_from_screen(self, screen_index):
+    def __grab_quests_from_screen(self, screen_index,last_updated):
         screen = self.mons[screen_index]
         roiX = screen[0]+int(0.625*screen[2])
         roiY = screen[1]+int(0.403*screen[3])
         roiW = screen[0]+int(screen[2]*0.964)
         roiH = screen[1]+int(0.824*screen[3])
         img = np.array(ImageGrab.grab(bbox=(roiX, roiY, roiW, roiH), all_screens=True))
-        img = self.__process_img(img)
+        img = self.__process_img(img,last_updated)
         return self.__text_to_quests(pytesseract.image_to_string(img, lang="eng", config="--psm 4"))
 
     def __score_quest(self, quest):
@@ -218,9 +231,15 @@ class Model:
         db.update({"quests":list(dq), "duplicates" : pd, "done": []})
         self.__write_state(**db)
         screen = db['screen']
+        last_updated = time.time()
         while not self.stop_event.is_set():
-            for quest in self.__grab_quests_from_screen(screen):
-
+            now = time.time()
+            if  now - last_updated > 20:
+                self.stop_event.set()
+                self.io.emit("stopped_sync")
+                continue
+            
+            for quest in self.__grab_quests_from_screen(screen,now - last_updated):
                 scores, quest = self.__score_quest(quest)
                 if not (len(scores) > 0):
                     continue
@@ -237,6 +256,7 @@ class Model:
                         db.update({"quests":list(dq), "duplicates" : pd, "done": []})
                         self.__write_state(**db)
                         self.io.emit("new_quest", {"dq" : list(dq), "pd" : pd})
+                        last_updated = time.time()
 
     def start_sync_thread(self):
         self.stop_event.clear()
@@ -332,6 +352,23 @@ class Model:
             return True
         return False
     
+    def edit_quest(self, form):
+        db = self.__read_state()
+        quests = db['quests']
+        if "index" in form and "edited" in form:
+            i = int(form['index'])
+            newQ = form['edited']
+            if 0 <= i < len(quests) and newQ not in quests:
+                if newQ != "":
+                    quests[i] = newQ
+                else:
+                    del quests[i]
+
+                db.update({"quests":quests})
+                self.__write_state(**db)
+                return True
+        return False
+
 # Define served routes, act as Controller.
 def define_routes(app):
 
@@ -410,6 +447,14 @@ def define_routes(app):
             return redirect("/")
         return "BAD!!!",404
 
+    @app.route("/edit", methods=['POST'])
+    def edit_quest():
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0) and m.edit_quest(req.form):
+            return redirect("/")
+        return "BAD!!!", 404
+                                 
+
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()
 
@@ -423,6 +468,7 @@ if __name__ == "__main__" and instance_check():
     db = m.get_state()
 
     # display the website in a isolated tab, current default browser is used. 
+    # socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
     flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=db['window'][2], height=db['window'][3])    
     flaskui.browser_command.append(f"--window-position={",".join(list(map(str,db['window'][:2])))}")
     flaskui.run()

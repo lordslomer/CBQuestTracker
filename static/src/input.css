@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --selectedBorder: theme(colors.blue.700)
+  --selectedBorder: theme(colors.blue.700);
 }
 
 ::-webkit-scrollbar {
@@ -41,4 +41,28 @@ body{
 
 p{
   user-select: none;
+}
+.toastContain {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 50px;
+}
+@layer components {
+  .toast {
+    @apply rounded-md bg-dark-300 shadow-md text-center px-10 py-4 select-none brightness-75 flex
+  }
+}
+
+.toast {
+  transform: scale(0.95) translateY(50px);
+  transition:
+    margin-top 0.7s,
+    transform 0.7s,
+    opacity 0.7s;
+}
+.toast.open {
+  margin-top: 10px;
+  transform: scale(1) translateY(0);
+  opacity: 1;
 }
