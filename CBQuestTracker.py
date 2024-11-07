@@ -68,8 +68,8 @@ class Model:
         self.sync_thread = None
         self.stop_event.set()
         self.io = socketio
-        self.__scan_monitors()
-
+        self.__scan_monitors() 
+    
     # App State
     def __scan_monitors(self):
         monitors = screeninfo.get_monitors()
@@ -77,24 +77,23 @@ class Model:
         db = self.__read_state()
 
         if nbr_mons > 1:
-            chosen_screen_index = db['screen']
-            if 0 <= chosen_screen_index < nbr_mons:
-                self.force_screen_pick = False
-            else:
-                self.force_screen_pick = True
+            self.force_screen_pick = not (0 <= db['screen'] < nbr_mons)
+            self.mons = list(map(lambda m: [m.x, m.y,m.width,m.height, self.__grab_screen(m)] ,monitors))
         else:
             # Very bad...
             mon = monitors[0]
             if not mon or not mon.is_primary:
                 sys.exit("How is there no monitor connected!!!")
 
-            db.update({"screen" : 0})
-            self.__write_state(**db)
+            if db['screen'] != 0:
+                db.update({"screen" : 0})
+                self.__write_state(**db)
+
             self.force_screen_pick = False
-        self.mons = monitors
+            self.mons = [mon.x,mon.y,mon.width,mon.height, "MAIN"]    
                 
     def __read_vocab(self):
-        vocabName = resource_path("vocabulary.json")
+        vocabName = resource_path("./vocabulary.json")
         if os.path.isfile(vocabName):
             with open(vocabName, "r") as f:
                 vocab = json.load(f)
@@ -111,9 +110,20 @@ class Model:
             self.__write_state([])
             return self.__read_state()
 
-    def __write_state(self, quests, duplicates=[], done=[], window=[0,0,725,950], screen=0):
+    def __write_state(self, quests, duplicates=[], done=[], window=[0,0,725,950], screen=-1):
         db = json.dumps({"quests": quests, "duplicates": duplicates, "done": done, "window": window, "screen":screen})
         self.db.setItem("db",db)
+
+    def __grab_screen(self, m:screeninfo.Monitor|List):
+        if not isinstance(m, screeninfo.Monitor):
+            boundries = (m[0], m[1], m[0]+m[2], m[1]+m[3])
+            name = m[-1]
+        else:
+            boundries = (m.x, m.y,m.x+m.width,m.y+m.height)
+            name = f"/{re.sub(r"[\\\.]+",'',m.name)}"
+        screen = ImageGrab.grab(bbox=boundries, all_screens=True)
+        screen.save(f"./static/imgs{name}.png")
+        return name
 
     def get_state(self):
         return self.__read_state()
@@ -121,6 +131,7 @@ class Model:
 
     # Sync Thread
     def __process_img(self, img):
+        cv2.imwrite("test.png",img)
         mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
         mask_blue = cv2.inRange(img, np.array([50, 40, 10]), np.array([250, 180, 40]))
         mask = mask_white + mask_blue
@@ -138,8 +149,13 @@ class Model:
         quests = list(filter(None, quests))
         return quests
 
-    def __grab_quests_from_screen(self):
-        img = np.array(ImageGrab.grab(bbox=(1200, 435, 1850, 890)))
+    def __grab_quests_from_screen(self, screen_index):
+        screen = self.mons[screen_index]
+        roiX = screen[0]+int(0.625*screen[2])
+        roiY = screen[1]+int(0.403*screen[3])
+        roiW = screen[0]+int(screen[2]*0.964)
+        roiH = screen[1]+int(0.824*screen[3])
+        img = np.array(ImageGrab.grab(bbox=(roiX, roiY, roiW, roiH), all_screens=True))
         img = self.__process_img(img)
         return self.__text_to_quests(pytesseract.image_to_string(img, lang="eng", config="--psm 4"))
 
@@ -201,20 +217,21 @@ class Model:
         db = self.__read_state()
         db.update({"quests":list(dq), "duplicates" : pd, "done": []})
         self.__write_state(**db)
+        screen = db['screen']
         while not self.stop_event.is_set():
-            for quest in self.__grab_quests_from_screen():
+            for quest in self.__grab_quests_from_screen(screen):
 
                 scores, quest = self.__score_quest(quest)
-                if len(scores) <= 0:
+                if not (len(scores) > 0):
                     continue
 
-                entry_to_add = min(scores)
-                exists_in_dq = entry_to_add[1] not in dq
-                exists_in_pd = entry_to_add[1] not in self.__flatten_dups(pd)
+                _, match = min(scores)
+                exists_in_dq = match not in dq
+                exists_in_pd = match not in self.__flatten_dups(pd)
                 if exists_in_dq and exists_in_pd:
                     old_dq = len(dq)
                     old_pd = len(self.__flatten_dups(pd))
-                    self.__add_quest_to_dict(entry_to_add[1], dq, pd)
+                    self.__add_quest_to_dict(match, dq, pd)
                     if len(dq) - old_dq > 0 or len(self.__flatten_dups(pd)) - old_pd:
                         db = self.__read_state()
                         db.update({"quests":list(dq), "duplicates" : pd, "done": []})
@@ -235,8 +252,7 @@ class Model:
             db.update({"quests":input})
             self.__write_state(**db)
             return True
-        else:
-            return False
+        return False
 
     def mark_quest_done(self, index):
         db = self.__read_state()
@@ -297,17 +313,40 @@ class Model:
             return True
         return False
 
+    def choose_screen(self, index):
+        db = self.__read_state()
+        if 0 <= index < len(self.mons):
+            if self.force_screen_pick:
+                self.force_screen_pick = False
+        
+            db.update({"screen":int(index)})
+            self.__write_state(**db)
+            return True
+        return False
+
+    def toggle_screen_pick(self):
+        if len(self.mons) > 1:
+            for mon in self.mons:
+                self.__grab_screen(mon)
+            m.force_screen_pick = True
+            return True
+        return False
+    
 # Define served routes, act as Controller.
 def define_routes(app):
 
     @app.route('/')
     def hello_world():
         db = m.get_state()
-        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set())
+        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set(), forceScreen=m.force_screen_pick, screens=m.mons)
     
     @app.route('/favicon.ico')
     def favicon():
-        return send_from_directory(resource_path('static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+        return send_from_directory(resource_path('./static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+    @app.route('/imgs/<name>')
+    def return_screen_img(name):
+        return send_from_directory(resource_path('./static/imgs'), name, mimetype='image/png')
 
     @app.route("/sync", methods=['POST'])
     def start_sync():
@@ -345,9 +384,8 @@ def define_routes(app):
             return redirect("/")
         return "BAD!!!", 404
 
-    @app.route("/dups", methods=['post'])
+    @app.route("/dups", methods=['POST'])
     def remove_duplicate():
-        db = m.get_state()
         if not m.force_screen_pick and m.stop_event.is_set() and m.remove_duplicates(req.form): 
             return redirect("/")
         return "BAD!!!", 404
@@ -357,7 +395,20 @@ def define_routes(app):
         if m.save_last_window_cords(req.json):
             return redirect("/")
         return "BAD!!!", 404
+    
+    @app.route("/screen/<int:index>", methods=['POST'])
+    def choose_screen(index):
+        db = m.get_state()
+        if m.stop_event.is_set() and not (len(db['duplicates']) > 0) and m.choose_screen(index):
+            return redirect("/")
+        return "BAD!!!",404
 
+    @app.route("/screen", methods=['POST'])
+    def toggle_on_screen_change():
+        db = m.get_state()
+        if m.stop_event.is_set() and not (len(db['duplicates']) > 0) and m.toggle_screen_pick():
+            return redirect("/")
+        return "BAD!!!",404
 
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, headers, max_quest_lenth = global_constants()

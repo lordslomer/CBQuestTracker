@@ -16,3 +16,5 @@ instance/
 .ipynb_checkpoints
 node_modules/
 Tesseract-OCR/
+static/imgs/
+test.png
