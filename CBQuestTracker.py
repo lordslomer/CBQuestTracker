@@ -158,7 +158,7 @@ class Model:
 
     def __text_to_quests(self, text):
         split = list(filter(None, re.split('\n\n', text)))
-        quests = [re.sub(r"[\d_,]+\/|(?<=\d),(?=\d)", "", re.sub(r"\s", " ", s).strip()) for s in split]
+        quests = [re.sub(r"\d+\/|(?<=\d),(?=\d)", "", re.sub(r"\s+", " ", s).strip()) for s in split]
         quests = list(filter(None, quests))
         return quests
 
@@ -219,16 +219,16 @@ class Model:
                 else:
                     pd += [sorted([new, q])]
                 return
-        dq.add(new)
+        dq.append(new)
 
     def __flatten_dups(self, pd):
         return [dup for dup_list in pd for dup in dup_list]
 
     def __sync_with_game(self):
-        dq = set()
+        dq = []
         pd = []
         db = self.__read_state()
-        db.update({"quests":list(dq), "duplicates" : pd, "done": []})
+        db.update({"quests":dq, "duplicates" : pd, "done": []})
         self.__write_state(**db)
         screen = db['screen']
         last_updated = time.time()
@@ -251,11 +251,11 @@ class Model:
                     old_dq = len(dq)
                     old_pd = len(self.__flatten_dups(pd))
                     self.__add_quest_to_dict(match, dq, pd)
-                    if len(dq) - old_dq > 0 or len(self.__flatten_dups(pd)) - old_pd:
+                    if len(dq) > old_dq or len(self.__flatten_dups(pd)) > old_pd:
                         db = self.__read_state()
-                        db.update({"quests":list(dq), "duplicates" : pd, "done": []})
+                        db.update({"quests":dq, "duplicates" : pd, "done": []})
                         self.__write_state(**db)
-                        self.io.emit("new_quest", {"dq" : list(dq), "pd" : pd})
+                        self.io.emit("new_quest", {"dq" : dq, "pd" : pd})
                         last_updated = time.time()
 
     def start_sync_thread(self):
