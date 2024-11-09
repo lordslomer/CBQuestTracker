@@ -158,7 +158,7 @@ class Model:
 
     def __text_to_quests(self, text):
         split = list(filter(None, re.split('\n\n', text)))
-        quests = [re.sub(r"\d+\/|(?<=\d),(?=\d)", "", re.sub(r"\s+", " ", s).strip()) for s in split]
+        quests = [re.sub(r"[\d_,]+\/|(?<=\d),(?=\d)", "", re.sub(r"\s", " ", s).strip()) for s in split]
         quests = list(filter(None, quests))
         return quests
 
