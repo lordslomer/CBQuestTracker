@@ -119,8 +119,7 @@
       <!-- Done List -->
       <div class="p-2 space-y-4">
         {% for done in doneQ %}
-        <div id="{{ 'topdone' if loop.first else '' }}"
-          class="rounded-xl shadow-md flex bg-dark-100 border-2 border-dark-200 items-center">
+        <div class="rounded-xl shadow-md flex bg-dark-100 border-2 border-dark-200 items-center">
           <p class="p-4 flex-grow brightness-50 regex-target">{{ done }}</p>
           {% if not_syncing %}
           <form action="/undone" method="post" class="flex items-center justify-center p-4 relative right-0">
@@ -204,16 +203,15 @@
 <script type="text/javascript" charset="utf-8">
 
   //Post Request Template
-  async function sendPostReq(url, list) {
+  async function sendPostReq(url, data) {
     return await fetch(url, {
       method: 'POST',
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(list)
+      body: JSON.stringify(data)
     })
   }
-
 
   //Hide screenToggleButton after click event.
   const screenToggleButton = document.getElementById('screenToggle')
@@ -330,22 +328,28 @@
     }
   })
 
-
   //Retain scroll
-  document.addEventListener("DOMContentLoaded", function (event) {
-    var scrollpos = localStorage.getItem('scrollpos');
-    if (scrollpos) document.querySelector("#mainscrollable").scrollTop = scrollpos;
-  });
+  document.body.onload = () => {
+    let scrollpos = localStorage.getItem('scrollpos');
+    if (scrollpos) {
+      const mainscroll = document.querySelector("#mainscrollable")
+      const max_scroll = mainscroll.scrollHeight - mainscroll.clientHeight
+      mainscroll.scrollTo(0, scrollpos * max_scroll)
+    }
+  }
   document.querySelector("#mainscrollable").onscroll = function (e) {
-    localStorage.setItem('scrollpos', e.target.scrollTop);
+    const max_scroll = e.target.scrollHeight - e.target.clientHeight
+    localStorage.setItem('scrollpos', e.target.scrollTop / max_scroll);
   };
 
 
   //Change color of Numbers
   [...document.querySelectorAll(".regex-target")].forEach(ptag => {
-    ptag.innerHTML = ptag.innerHTML.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>").replaceAll(/\bor\b(?!\s+(your|You|higher|Bandit|Field|Siege|rating|better|A)\b)/gi, "<span class='text-blue-500'> or </span>")
+    ptag.innerHTML = insertColorSpans(ptag.innerHTML)
   })
-
+  function insertColorSpans(text) {
+    return text.replaceAll(/(\d+)/gi, "<span class='text-yellow-500'>$1</span>").replaceAll(/\bor\b(?!\s+(your|You|higher|Bandit|Field|Siege|rating|better|A)\b)/gi, "<span class='text-blue-500'> or </span>")
+  }
 
   //Save the Window's last position
   window.onbeforeunload = function () {
@@ -386,9 +390,7 @@
         style_grab(e)
       },
       setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
-      onSort: () => sendPostReq("/update", sortable.toArray()).then(res => {
-        if (res.status == 200) window.location = "/"
-      }),
+      onSort: () => sendPostReq("/update", sortable.toArray()),
       onChoose: style_grabbing,
       onStart: style_grabbing,
       onUnchoose: style_grab,
