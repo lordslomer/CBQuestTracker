@@ -111,7 +111,7 @@ class Model:
             self.__write_state([])
             return self.__read_state()
 
-    def __write_state(self, quests, duplicates=[], done=[], window=[0,0,725,950], screen=-1):
+    def __write_state(self, quests, duplicates=[], done=[], window=[0,0,930,970], screen=-1):
         db = json.dumps({"quests": quests, "duplicates": duplicates, "done": done, "window": window, "screen":screen})
         self.db.setItem("db",db)
 
@@ -471,4 +471,5 @@ if __name__ == "__main__" and instance_check():
     # socketio.run(app=app, host="0.0.0.0", port=3000, debug=True)
     flaskui = FlaskUI(app=app, socketio=socketio, server="flask_socketio", browser_path=get_system_default_browser(), fullscreen=False, width=db['window'][2], height=db['window'][3])    
     flaskui.browser_command.append(f"--window-position={",".join(list(map(str,db['window'][:2])))}")
+    flaskui.browser_command = [f"--user-data-dir={resource_path("browser-data")}" if c.startswith("--user-data-dir=") else c for c in flaskui.browser_command]
     flaskui.run()
