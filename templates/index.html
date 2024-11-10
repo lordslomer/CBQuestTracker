@@ -273,10 +273,7 @@
 
       //Create form for submition
       const newForm = document.createElement("form")
-      newForm.classList.add("flex-grow")
-      newForm.classList.add("border-l-2")
-      newForm.classList.add("border-dark-100")
-      newForm.classList.add("p-4")
+      newForm.classList.add("flex-grow", "border-l-2", "border-dark-100", "p-4")
       newForm.action = "/edit"
       newForm.method = "POST"
       const index = document.createElement("input")
@@ -287,14 +284,7 @@
 
       //Create textarea
       const newInput = document.createElement("textarea")
-      newInput.classList.add("focus:outline-none")
-      newInput.setAttribute("data-gramm", "false")
-      newInput.classList.add("border-dark-100")
-      newInput.classList.add("align-middle")
-      newInput.classList.add("bg-dark-200")
-      newInput.classList.add("resize-none")
-      newInput.classList.add("border-b-2")
-      newInput.classList.add("w-full")
+      newInput.classList.add("focus:outline-none", "border-dark-100", "align-middle", "bg-dark-200", "resize-none", "border-b-2", "w-full")
       newInput.value = selectedPQuest
       newInput.name = "edited"
 
@@ -405,7 +395,9 @@
         style_grab(e)
       },
       setData: (dataTransfer, _) => dataTransfer.setDragImage(document.createElement("img"), 0, 0),
-      onSort: () => sendPostReq("/update", sortable.toArray()),
+      onSort: () => sendPostReq("/update", sortable.toArray()).then(res => {
+        if (res.status == 200) window.location = "/"
+      }),
       onChoose: style_grabbing,
       onStart: style_grabbing,
       onUnchoose: style_grab,
