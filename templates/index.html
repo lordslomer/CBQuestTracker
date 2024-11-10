@@ -25,12 +25,27 @@
       class="grid h-24 {{ 'grid-cols-5' if not_syncing else 'grid-cols-3' }}  mb-5 mx-2 bg-dark-200 rounded-xl shadow-md">
 
       <!-- Quests Stats -->
-      <div class="mr-5 flex {{ 'col-span-3' if not_syncing else 'col-span-2' }} p-3 justify-evenly items-center">
+      <div
+        class="mr-5 flex {{ 'col-span-3' if not_syncing else 'col-span-2' }} py-3 {{ 'px-7 justify-between' if quests|length + doneQ|length > 0 else 'px-3 justify-center' }} items-center">
         {% if not_syncing %}
 
         {% if quests|length + doneQ|length > 0 %}
         <p>Quests Done:</p>
         <p> {{ doneQ|length }} / {{ doneQ|length + quests|length }}</p>
+        <form action="/shorten" method="POST">
+          <button type="submit"
+            class="bg-dark-300 p-2 flex items-center justify-center rounded shadow-md hover:brightness-90">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+              stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+            <span>&#9168;</span>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+              stroke="currentColor" class="size-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+            </svg>
+          </button>
+        </form>
         {% else %}
         <p class="flex items-center">Sync to Track:</p>
         {% endif %}
@@ -59,7 +74,7 @@
       </div>
 
       <!-- Sync Area -->
-      <div class="ml-5 flex p-3 {{ 'col-span-2' if not_syncing else 'col-span-1' }} justify-around items-center">
+      <div class="ml-5 flex {{ 'col-span-2' if not_syncing else 'col-span-1' }} p-3 justify-around items-center">
         {% if not_syncing %}
         {% if screens|length > 1 and 0 <= chosenScreen < screens|length %} <button type="button" id="screenToggle"
           class="bg-dark-300 px-4 py-2 rounded shadow-md flex space-x-2 hover:brightness-90 items-center">
@@ -71,13 +86,13 @@
           <p>{{ chosenScreen + 1}}</p>
           </button>
           {% endif %}
-          <form action="/sync" method="post">
+          <form action="/sync" method="POST">
             <button class="bg-blue-700 hover:bg-blue-800 py-2 px-10 rounded">
               <p>Sync</p>
             </button>
           </form>
           {% else %}
-          <form action="/stop" method="post">
+          <form action="/stop" method="POST">
             <button class="bg-red-700 hover:bg-red-800 py-2 px-10 rounded">
               <p>Stop</p>
             </button>
@@ -105,7 +120,7 @@
           </p>
 
           {% if not_syncing %}
-          <form action="/done/{{ loop.index0 }}" method="post"
+          <form action="/done/{{ loop.index0 }}" method="POST"
             class="flex items-center justify-center p-4 relative right-0">
             <button class="bg-dark-300 px-4 py-2 rounded-xl  hover:scale-110 shadow-md">
               <p>&check;</p>
@@ -122,7 +137,7 @@
         <div class="rounded-xl shadow-md flex bg-dark-100 border-2 border-dark-200 items-center">
           <p class="p-4 flex-grow brightness-50 regex-target">{{ done }}</p>
           {% if not_syncing %}
-          <form action="/undone" method="post" class="flex items-center justify-center p-4 relative right-0">
+          <form action="/undone" method="POST" class="flex items-center justify-center p-4 relative right-0">
             <input name="done" value="{{ done }}" class="hidden" />
             <button class="bg-blue-700 px-4 py-2 rounded-xl  hover:scale-110 shadow-md">
               <p>&check;</p>
@@ -145,7 +160,7 @@
       {% else %}
 
       <!-- Syncing Quests List -->
-      <div id="questlist" class="flex flex-col p-2 space-y-4 items-center">
+      <div id="questlist" class="p-2 space-y-4 ">
         <p></p>
         <img id="last_screen" class="w-full" src="" alt="" />
       </div>
@@ -164,7 +179,7 @@
       </div>
       <div class="lg:grid lg:grid-cols-2 lg:gap-12 max-h-[700px] max-lg:space-y-4 overflow-auto p-4">
         {% for screen in screens %}
-        <form action="/screen/{{ loop.index0 }}" method="post">
+        <form action="/screen/{{ loop.index0 }}" method="POST">
           <button class="bg-dark-200 rounded-md shadow-md border-2 border-dark-100 hover:border-dark-300 max-w-lg">
             <p class="p-2">Display {{ loop.index0 + 1 }}</p>
             <img class="select-none" src="/imgs/{{ screen.4 }}.png" alt="">
@@ -187,7 +202,7 @@
       </div>
       <div class="lg:grid lg:grid-cols-2 lg:gap-12 max-h-96 max-lg:space-y-4 overflow-auto p-4">
         {% for candidate in dups|first %}
-        <form action="/dups" method="post">
+        <form action="/dups" method="POST">
           <input class="hidden" name="dup" value="{{ candidate }}">
           <button class="p-10 bg-dark-200 rounded-md shadow-md border-2 border-dark-100 hover:border-dark-300 max-w-lg">
             <p class="regex-target">{{ candidate }}</p>

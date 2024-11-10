@@ -96,12 +96,14 @@ class Model:
         try:
             res = requests.get(url)
             if res.status_code == 200:  
-                vocab = res.json()
+                self.vocab_pairs = res.json()
+                self.vocabulary = [voc[0]  for voc in self.vocab_pairs]
             else:
-                vocab = []
+                self.vocab_pairs = []
+                self.vocabulary  = []
         except:
-            vocab = []
-        return vocab
+            self.vocab_pairs = []
+            self.vocabulary  = []      
 
     def __read_state(self):
         db = self.db.getItem("db")
@@ -231,7 +233,7 @@ class Model:
         db.update({"quests":dq, "duplicates" : pd, "done": []})
         self.__write_state(**db)
         screen = db['screen']
-        self.vocabulary = self.__read_vocab()
+        self.__read_vocab()
         last_updated = time.time()
         while not self.stop_event.is_set():
             now = time.time()
@@ -299,23 +301,24 @@ class Model:
             self.__write_state(**db)
             return True
         return False
-
-    def __find_duplicates_in_quests(self, quests, dups):
-        for dup in dups[0]:
-            for index, quest in enumerate(quests):
-                if quest == dup:
-                    return index,dup
-        return -1, ""
     
     def remove_duplicates(self, form):
         db = self.__read_state()
         quests = db['quests']
         dups = db['duplicates']
+
+        def __find_duplicates_in_quests(quests, dups):
+            for dup in dups[0]:
+                for index, quest in enumerate(quests):
+                    if quest == dup:
+                        return index,dup
+            return -1, ""
+        
         if "dup" in form:
             dup = form['dup']
             pair = dups[0]
             if dup in pair:
-                index, found = self.__find_duplicates_in_quests(quests,dups)
+                index, found = __find_duplicates_in_quests(quests,dups)
                 if index > -1:
                     if found != dup:
                         quests[index] = dup
@@ -369,6 +372,29 @@ class Model:
                 self.__write_state(**db)
                 return True
         return False
+
+    def shorten_quest_list(self):
+        self.__read_vocab()
+        db = self.__read_state()
+        quests = db['quests']
+
+        if not (len(self.vocabulary) > 0):
+            return False 
+
+        def __quest_in_vocab_pairs(quest, pairs):
+            for i, p in enumerate(pairs):
+                if p[0] == quest:
+                    return i, p[1].strip()
+            return -1, ""
+        
+        for i, quest in enumerate(quests):
+            index, short = __quest_in_vocab_pairs(quest, self.vocab_pairs)
+            if index > -1 and short != "":
+                quests[i] = short
+
+        db.update({"quests":quests})
+        self.__write_state(**db)
+        return True
 
 # Define served routes, act as Controller.
 def define_routes(app):
@@ -454,7 +480,14 @@ def define_routes(app):
         if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0) and m.edit_quest(req.form):
             return redirect("/")
         return "BAD!!!", 404
-                                 
+
+    @app.route("/shorten", methods=['POST'])
+    def shorten_quests():
+        db = m.get_state()
+        if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0):
+            found_vocab = m.shorten_quest_list()
+            return redirect(f"/{'' if found_vocab else f"?toast=Couldn't Connect to Vocabulary at {url}"}")
+        return "BAD!!!", 404
 
 if __name__ == "__main__" and instance_check():
     naughty_dict, url, max_quest_lenth = global_constants()
