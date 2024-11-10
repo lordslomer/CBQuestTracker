@@ -5,7 +5,7 @@ a = Analysis(
     ['CBQuestTracker.py'],
     pathex=[],
     binaries=[],
-    datas=[('vocabulary.json', '.'), ('templates', 'templates'), ('static', 'static'), ('Tesseract-OCR', 'Tesseract-OCR')],
+    datas=[('templates', 'templates'), ('static', 'static'), ('Tesseract-OCR', 'Tesseract-OCR')],
     hiddenimports=['engineio.async_drivers.gevent'],
     hookspath=[],
     hooksconfig={},

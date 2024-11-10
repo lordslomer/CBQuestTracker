@@ -407,8 +407,8 @@
       FADE_DUR = 700,
       DUR = 3000,
       toastContain = document.createElement('div');
-    str = "Synchronization Stopped Automatically!"
-
+    str = displayToast
+    let duration = Math.max(DUR, str.length * 80);
     toastContain.classList.add('toastContain');
     document.body.appendChild(toastContain);
 
@@ -420,11 +420,11 @@
     setTimeout(() => EL.classList.add('open'));
     setTimeout(
       () => EL.classList.remove('open'),
-      DUR
+      duration
     );
     setTimeout(
       () => toastContain.removeChild(EL),
-      DUR + FADE_DUR
+      duration + FADE_DUR
     );
   }
   if (window.location.pathname == "/")
@@ -458,14 +458,13 @@
         fetch(url).then(res => res.blob()).then(blob => {
           last_screen.src = URL.createObjectURL(blob)
           last_screen.parentElement.children[0].innerText = "Haven't found anything in a while, this is what the app sees:"
-          last_screen.parentElement.prepend(msg)
         })
       }
     })
 
     //Sync Thread Stopped after a duration of not finding quests:
-    socket.on("stopped_sync", () => {
-      window.location = "/?toast"
+    socket.on("stopped_sync", (msg) => {
+      window.location = `/?toast=${msg}`
     })
   });
 </script>

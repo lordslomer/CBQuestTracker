@@ -12,6 +12,7 @@ import regex as re
 import screeninfo
 import threading
 import jellyfish
+import requests
 import os, sys
 import time
 import json
@@ -19,17 +20,16 @@ import cv2
 
 # Some constants
 def global_constants():
+    pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
+    url = "https://cbquestvocabenv.salamski.com/"
+    max_quest_lenth = 110
     naughty_dict = {
         "an A+ rating or better in 10 Field or Siege Battles of any type",
         "Join 10 Ranked Battles or win 10 Field or Siege Battles",
         "in Field or Siege Battles",
         "in 8 Siege Battles",
     }
-    url = "https://cbimg.salamski.com"
-    headers = {"content-type": "image/png"}
-    max_quest_lenth = 110
-    pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
-    return naughty_dict, url, headers, max_quest_lenth
+    return naughty_dict, url, max_quest_lenth
 
 # Production path.
 def resource_path(relative_path):
@@ -63,7 +63,6 @@ def get_system_default_browser():
 # Model class, preforms all operations on the state. 
 class Model:
     def __init__(self, socketio: SocketIO):
-        self.vocabulary = self.__read_vocab()
         self.db = lsp("CBQuestTracker", "json")
         self.stop_event = threading.Event()
         self.sync_thread = None
@@ -94,12 +93,13 @@ class Model:
             self.mons = [[mon.x,mon.y,mon.width,mon.height, "MAIN"]  ]  
                 
     def __read_vocab(self):
-        vocabName = resource_path("./vocabulary.json")
-        if os.path.isfile(vocabName):
-            with open(vocabName, "r") as f:
-                vocab = json.load(f)
-                f.close()
-        else:
+        try:
+            res = requests.get(url)
+            if res.status_code == 200:  
+                vocab = res.json()
+            else:
+                vocab = []
+        except:
             vocab = []
         return vocab
 
@@ -231,12 +231,13 @@ class Model:
         db.update({"quests":dq, "duplicates" : pd, "done": []})
         self.__write_state(**db)
         screen = db['screen']
+        self.vocabulary = self.__read_vocab()
         last_updated = time.time()
         while not self.stop_event.is_set():
             now = time.time()
-            if  now - last_updated > 20:
+            if  now - last_updated > 20 or (not (len(self.vocabulary) > 0)  and (now - last_updated > 1)):
                 self.stop_event.set()
-                self.io.emit("stopped_sync")
+                self.io.emit("stopped_sync", f"Couldn't Connect to Vocabulary at {url}" if not (len(self.vocabulary) > 0) else "Synchronization Stopped Automatically!")
                 continue
             
             for quest in self.__grab_quests_from_screen(screen,now - last_updated):
@@ -456,7 +457,7 @@ def define_routes(app):
                                  
 
 if __name__ == "__main__" and instance_check():
-    naughty_dict, url, headers, max_quest_lenth = global_constants()
+    naughty_dict, url, max_quest_lenth = global_constants()
 
     # Flask API as Controller, serves HTML as View
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
