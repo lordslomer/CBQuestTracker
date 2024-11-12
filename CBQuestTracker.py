@@ -1,4 +1,4 @@
-from flask import Flask, redirect, render_template, request as req, send_from_directory
+from flask import Flask, redirect, render_template, request as req, send_file, send_from_directory
 from winreg import HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, OpenKey, QueryValueEx
 from localStoragePy import localStoragePy as lsp
 from flask_socketio import SocketIO
@@ -20,7 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
-    APP_VERSION = '1.0.1'
+    APP_VERSION = '1.0.2'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
@@ -153,7 +153,7 @@ class Model:
                 elapsed = 0.3
             if elapsed >= 0.3 and last_updated > 5:
                 cv2.imwrite(resource_path("./static/imgs/last.png"), cv2.cvtColor(cv2.resize(img, None, fx=0.4, fy=0.4), cv2.COLOR_RGB2BGR))
-                self.io.emit("new_last", '/static/imgs/last.png')
+                self.io.emit("new_last", '/imgs/last.png')
                 self.last_screen_sent = time.time()
             
         mask_white = cv2.inRange(img, np.array([200, 200, 200]), np.array([255, 255, 255]))
@@ -416,6 +416,10 @@ def define_routes(app):
     @app.route('/favicon.ico')
     def favicon():
         return send_from_directory(resource_path('./static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+    @app.route('/vids/tutorial')
+    def return_tutorial_video():
+        return send_file(resource_path('./static/imgs/tutorial.mp4'), mimetype='video/mp4')
 
     @app.route('/imgs/<name>')
     def return_screen_img(name):
