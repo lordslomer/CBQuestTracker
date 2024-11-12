@@ -20,7 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
-    APP_VERSION = '1.0.0'
+    APP_VERSION = '1.0.1'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
