@@ -20,7 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
-    APP_VERSION = '1.0.2'
+    APP_VERSION = '1.0.3'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
@@ -419,7 +419,7 @@ def define_routes(app):
 
     @app.route('/vids/tutorial')
     def return_tutorial_video():
-        return send_file(resource_path('./static/imgs/tutorial.mp4'), mimetype='video/mp4')
+        return send_file(resource_path('./static/tutorial.mp4'), mimetype='video/mp4')
 
     @app.route('/imgs/<name>')
     def return_screen_img(name):
