@@ -20,6 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
+    APP_VERSION = '1.0.0'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
@@ -29,7 +30,15 @@ def global_constants():
         "in Field or Siege Battles",
         "in 8 Siege Battles",
     }
-    return naughty_dict, url, max_quest_lenth
+    try:
+        version_res = requests.get(f"{url}/version")
+        if version_res.status_code == 200:
+            forceUpdate = version_res.text > APP_VERSION
+        else:
+            forceUpdate = False
+    except Exception as e:
+        forceUpdate = False
+    return naughty_dict, url, max_quest_lenth, forceUpdate, APP_VERSION
 
 # Production path.
 def resource_path(relative_path):
@@ -402,7 +411,7 @@ def define_routes(app):
     @app.route('/')
     def hello_world():
         db = m.get_state()
-        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set(), forceScreen=m.force_screen_pick, screens=m.mons, chosenScreen=db['screen'])
+        return render_template("index.html", quests=db['quests'], dups=db['duplicates'], doneQ=db['done'], not_syncing=m.stop_event.is_set(), forceScreen=m.force_screen_pick, screens=m.mons, chosenScreen=db['screen'], forceUpdate=forceUpdate, url=url)
     
     @app.route('/favicon.ico')
     def favicon():
@@ -490,7 +499,7 @@ def define_routes(app):
         return "BAD!!!", 404
 
 if __name__ == "__main__" and instance_check():
-    naughty_dict, url, max_quest_lenth = global_constants()
+    naughty_dict, url, max_quest_lenth, forceUpdate, APP_VERSION = global_constants()
 
     # Flask API as Controller, serves HTML as View
     app = Flask(__name__, template_folder=resource_path("./templates"), static_folder=resource_path("./static"))
