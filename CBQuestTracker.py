@@ -20,7 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
-    APP_VERSION = '1.0.3'
+    APP_VERSION = '1.0.4'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
@@ -48,7 +48,7 @@ def resource_path(relative_path):
 # Check if already running
 def instance_check():
     U32DLL = WinDLL("user32")
-    hwnd = U32DLL.FindWindowW(None, "CBQuestTracker")
+    hwnd = U32DLL.FindWindowW(None, "CB Quest Tracker")
     if hwnd:
         U32DLL.ShowWindow(hwnd, 5)
         U32DLL.SetForegroundWindow(hwnd)
