@@ -20,7 +20,7 @@ import cv2
 
 # Some constants
 def global_constants():
-    APP_VERSION = '1.0.4'
+    APP_VERSION = '1.0.5'
     pytesseract.pytesseract.tesseract_cmd = resource_path("./Tesseract-OCR/tesseract.exe")
     url = "https://cbquestvocabenv.salamski.com/"
     max_quest_lenth = 110
@@ -492,7 +492,7 @@ def define_routes(app):
         db = m.get_state()
         if not m.force_screen_pick and m.stop_event.is_set() and not (len(db['duplicates']) > 0) and m.edit_quest(req.form):
             return redirect("/")
-        return "BAD!!!", 404
+        return redirect(f"/?toast=Quest Already Exists!")
 
     @app.route("/shorten", methods=['POST'])
     def shorten_quests():
